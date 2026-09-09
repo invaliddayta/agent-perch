@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="390" viewBox="0 0 1200 390" role="img" aria-labelledby="title desc">
+  <title id="title">Agent Perch</title>
+  <desc id="desc">A yellow pixel bird sits on a terminal window. Agent Perch: tmux, with a window seat. A small, hackable browser terminal built with Bun and tmux.</desc>
+  <rect width="1200" height="390" fill="#090c12"/>
+  <rect x="24.5" y="24.5" width="1151" height="341" fill="#101318" stroke="#45484e"/>
+  <path d="M25 59.5h1150M25 326.5h1150" stroke="#45484e"/>
+  <rect x="25" y="25" width="1150" height="34" fill="#1d1f23"/>
+  <path d="m40 36 6 6-6 6m12 0h7" fill="none" stroke="#ffd128" stroke-width="2"/>
+  <g font-family="'DejaVu Sans Mono',Consolas,monospace">
+    <text x="72" y="47" fill="#c9cbd0" font-size="13">agent-perch</text>
+    <text x="1146" y="47" fill="#96999f" font-size="12" text-anchor="end">BUN + TMUX / LINUX</text>
+    <text x="70" y="159" fill="#dededb" font-size="76" font-weight="700" letter-spacing="-5">agent</text>
+    <text x="331" y="228" fill="#806015" font-size="102" font-weight="700" font-style="italic" letter-spacing="-6">perch</text>
+    <text x="327" y="224" fill="#ffd128" font-size="102" font-weight="700" font-style="italic" letter-spacing="-6">perch</text>
+    <text x="73" y="277" fill="#b3b7bf" font-size="20">tmux, with a window seat.</text>
+    <text x="42" y="350" fill="#96999f" font-size="12">SMALL ENOUGH TO MESS WITH.</text>
+    <text x="1157" y="350" fill="#96999f" font-size="12" text-anchor="end">YOUR TERMINALS. STILL YOUR TERMINALS.</text>
+  </g>
+  <rect x="770.5" y="178.5" width="330" height="115" fill="#090c12" stroke="#73777e"/>
+  <rect x="771" y="179" width="329" height="25" fill="#24262a"/>
+  <path d="M771 204.5h329" stroke="#73777e"/>
+  <g font-family="'DejaVu Sans Mono',Consolas,monospace" font-size="14">
+    <text x="783" y="196" fill="#c9cbd0">terminal</text>
+    <text x="791" y="237" fill="#ffd128">$ tmux attach</text>
+    <text x="791" y="265" fill="#96999f">[the agent is still working]</text>
+  </g>
+  <g shape-rendering="crispEdges">
+    <path d="M935 93h49v14h14v14h14v42h-14v15h-70v-14h-14v-14h-14v-28h14v14h14v-29h7z" fill="#ffd128"/>
+    <path d="M998 120h28v14h-28z" fill="#e89b24"/>
+    <path d="M970 107h14v14h-14z" fill="#090c12"/>
+    <path d="M935 136h14v14h28v14h-42z" fill="#ad8017"/>
+    <path d="M942 164h7v21h-21v-7h14zm35 0h7v21h-21v-7h14z" fill="#e89b24"/>
+  </g>
+  <path d="M736 89h22m-11-11v22M1088 124h12m-6-6v12" stroke="#45484e"/>
+</svg>

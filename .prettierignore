@@ -1,0 +1,6 @@
+node_modules
+dist
+public/models
+public/ort
+.state
+bun.lock

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="data:," />
+    <title>Perch browser checks</title>
+  </head>
+  <body>
+    <pre id="results">Running browser checks...</pre>
+    <script type="module">
+      import { runBrowserChecks } from "./browser-checks.tsx";
+      const results = document.querySelector("#results");
+      runBrowserChecks()
+        .then((checks) => {
+          results.textContent = checks.join("\n");
+          results.dataset.status = "passed";
+        })
+        .catch((error) => {
+          results.textContent = error.stack;
+          results.dataset.status = "failed";
+        });
+    </script>
+  </body>
+</html>

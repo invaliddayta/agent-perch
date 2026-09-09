@@ -1,0 +1,39 @@
+{
+  "name": "agent-perch",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Browser terminals for OpenCode, Codex, and DeepSeek Harness.",
+  "engines": {
+    "bun": ">=1.3.10"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun vite --host 127.0.0.1",
+    "build": "bun --bun vite build",
+    "start": "bun server/index.ts",
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "voice:prepare": "bun scripts/prepare-voice.ts",
+    "format": "prettier --write src server scripts tests integrations",
+    "install:service": "bun scripts/install.ts"
+  },
+  "dependencies": {
+    "@moonshine-ai/moonshine-wasm": "0.1.5",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/xterm": "^6.0.0",
+    "lucide-react": "^1.41.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "^3.9.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}
