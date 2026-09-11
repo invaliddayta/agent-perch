@@ -191,6 +191,15 @@ test.skipIf(!Bun.which("tmux"))(
         "#{pane_id}",
         "sleep 60",
       );
+      await run(
+        "set-option",
+        "-t",
+        "original",
+        "update-environment",
+        "PERCH_TEST_PRESENT PERCH_TEST_ABSENT",
+      );
+      for (const name of ["PERCH_TEST_PRESENT", "PERCH_TEST_ABSENT"])
+        await run("set-environment", "-t", "original", name, "session-value");
       // A separate Bun process isolates tmuxPrefix's environment from other tests.
       monitor = Bun.spawn(
         [
@@ -206,7 +215,13 @@ test.skipIf(!Bun.which("tmux"))(
     `,
         ],
         {
-          env: { ...process.env, TMUX_SOCKET: socket, TMUX: "" },
+          env: {
+            ...process.env,
+            TMUX_SOCKET: socket,
+            TMUX: "",
+            PERCH_TEST_PRESENT: "observer-value",
+            PERCH_TEST_ABSENT: undefined,
+          },
           stdout: "pipe",
           stderr: "pipe",
         },
@@ -230,6 +245,10 @@ test.skipIf(!Bun.which("tmux"))(
         ).includes("original:"),
       );
       await until(() => events.includes("ATTACHED"));
+      for (const name of ["PERCH_TEST_PRESENT", "PERCH_TEST_ABSENT"])
+        expect(await run("show-environment", "-t", "original", name)).toBe(
+          `${name}=session-value`,
+        );
       events.splice(events.indexOf("ATTACHED"), 1);
       expect(await run("list-clients", "-F", "#{client_flags}")).toContain(
         "ignore-size",

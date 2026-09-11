@@ -174,8 +174,18 @@ export function watchAttention(
 ) {
   // Attach to the original session, not a grouped viewer. Never write stdin or
   // change notify/pipe-pane hooks. The owner manages lifecycle; no restarts here.
+  // -E preserves the session environment instead of importing the observer's.
   const child = Bun.spawn(
-    [...tmuxPrefix, "-C", "attach-session", "-f", "ignore-size", "-t", session],
+    [
+      ...tmuxPrefix,
+      "-C",
+      "attach-session",
+      "-E",
+      "-f",
+      "ignore-size",
+      "-t",
+      session,
+    ],
     {
       env: { ...process.env, TMUX: "" },
       stdin: "pipe",
