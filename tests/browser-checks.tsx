@@ -181,10 +181,21 @@ export async function runBrowserChecks() {
     );
     checks.push("PASS guarded, acknowledged, non-submitting paste");
     const piTarget = ref.current!.capturePasteTarget("pi");
+    const piCapture = ws.sent.at(-1)!;
+    assert(
+      piCapture.type === "capture-paste-target" && piCapture.paneId === "%1",
+      "Pi must capture process identity before uploading",
+    );
+    ws.receive({ type: "paste-target-ack", id: piCapture.id });
+    await piTarget.ready;
     const piDelivery = piTarget.paste(piImageReference('/state/a b/"$().png'));
+    await wait(() =>
+      ws.sent.some((m) => m.type === "paste" && m.backend === "pi"),
+    );
     const piPaste = ws.sent.filter((m) => m.type === "paste").at(-1)!;
     assert(
       piPaste.backend === "pi" &&
+        piPaste.targetId === piCapture.id &&
         !piPaste.opencodeOnly &&
         piPaste.submit === false &&
         !/[\r\n]/.test(piPaste.data),
@@ -192,6 +203,26 @@ export async function runBrowserChecks() {
     );
     ws.receive({ type: "input-ack", id: piPaste.id });
     await piDelivery;
+    const cancelledDelivery = piTarget.paste("uncertain Pi delivery");
+    const cancelledResult = rejects(
+      () => cancelledDelivery,
+      "before delivery was confirmed",
+    );
+    await wait(() =>
+      ws.sent.some(
+        (m) => m.type === "paste" && m.data.includes("uncertain Pi delivery"),
+      ),
+    );
+    const cancelledRequest = ws.sent.at(-1)!;
+    const staleCapture = ref.current!.capturePasteTarget("pi");
+    const staleRequest = ws.sent.at(-1)!;
+    const staleReady = rejects(() => staleCapture.ready, "terminal changed");
+    ws.receive({ type: "pane", paneId: "%2", viewerId: "$20" });
+    await staleReady;
+    await cancelledResult;
+    ws.receive({ type: "input-ack", id: cancelledRequest.id });
+    ws.receive({ type: "paste-target-ack", id: staleRequest.id });
+    await rejects(() => staleCapture.paste("late ack"), "terminal changed");
 
     ws.receive({ type: "pane", paneId: "%2", viewerId: "$20" });
     ws.receive({ type: "pane", paneId: "%1", viewerId: "$20" });
@@ -207,10 +238,29 @@ export async function runBrowserChecks() {
     ref.current!.cancelPaste();
     assert(cancellations === 1, "Navigation must cancel targeting work once");
     await rejects(() => cancelled.paste("stale"), "terminal changed");
+    const timeoutCapture = ref.current!.capturePasteTarget("pi");
+    const timeoutRequest = ws.sent.at(-1)!;
+    await rejects(() => timeoutCapture.ready, "not acknowledged");
+    ws.receive({ type: "paste-target-ack", id: timeoutRequest.id });
+    await rejects(
+      () => timeoutCapture.paste("late ack after timeout"),
+      "not acknowledged",
+    );
+    assert(
+      ws.sent.filter(
+        (m) => m.type === "capture-paste-target" && m.id === timeoutRequest.id,
+      ).length === 1,
+      "A timed-out destination must not be recaptured automatically",
+    );
     checks.push(
       "PASS pane round trips and explicit navigation invalidate destinations",
     );
 
+    const disconnectedCapture = ref.current!.capturePasteTarget("pi");
+    const disconnectedReady = rejects(
+      () => disconnectedCapture.ready,
+      "terminal changed",
+    );
     const resized = ref.current!.capturePasteTarget();
     const count = Socket.instances.length;
     renderTerminal(true, 16);
@@ -231,6 +281,12 @@ export async function runBrowserChecks() {
       () => resized.paste("new connection, same pane"),
       "terminal changed",
     );
+    await disconnectedReady;
+    const disposedCapture = ref.current!.capturePasteTarget("pi");
+    const disposedReady = rejects(
+      () => disposedCapture.ready,
+      "terminal changed",
+    );
     const unconfirmed = ref
       .current!.capturePasteTarget()
       .paste("uncertain delivery");
@@ -240,6 +296,7 @@ export async function runBrowserChecks() {
     );
     flushSync(() => root.render(null));
     await rejected;
+    await disposedReady;
     checks.push(
       "PASS font resize, disconnect, reattach, and uncertain delivery cleanup",
     );
@@ -878,12 +935,20 @@ async function appChecks(root: Root, host: HTMLElement) {
         clipboardData: clipboard,
       }),
     );
+    await wait(() => ws.sent.some((m) => m.type === "capture-paste-target"));
+    assert(
+      uploads.length === 0,
+      "Upload must wait for the original Pi process capture",
+    );
+    const piCapture = ws.sent.find((m) => m.type === "capture-paste-target")!;
+    ws.receive({ type: "paste-target-ack", id: piCapture.id });
     await wait(() => uploads.length === 1);
     uploads[0].finish();
     await wait(() => ws.sent.some((m) => m.type === "paste"));
     const piPaste = ws.sent.find((m) => m.type === "paste")!;
     assert(
       piPaste.backend === "pi" &&
+        piPaste.targetId === piCapture.id &&
         piPaste.data.includes(' "/fixture/image.png" ') &&
         piPaste.submit === false,
       "Pi upload must paste a quoted file reference without Enter",

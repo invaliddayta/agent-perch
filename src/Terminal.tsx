@@ -13,6 +13,7 @@ import { isTerminalResponse } from "./terminal-protocol";
 
 export type PasteTarget = {
   signal: AbortSignal;
+  ready: Promise<void>;
   paste(text: string): Promise<void>;
 };
 export type TerminalHandle = {
@@ -53,6 +54,7 @@ export function Terminal(props: {
   const ready = useRef(false);
   const pasteCapture = useRef<string | null>(null);
   const pending = useRef(new Map<string, (error?: string) => void>());
+  const pendingCaptures = useRef(new Map<string, (error?: string) => void>());
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState("connecting");
   function cancelPaste() {
@@ -101,10 +103,56 @@ export function Terminal(props: {
       )
         throw new Error("Open a connected supported prompt before pasting.");
       const { signal } = (pasteLifetime.current ??= new AbortController());
+      const targetId = backend === "pi" ? crypto.randomUUID() : undefined;
+      const captured = targetId
+        ? new Promise<void>((resolve, reject) => {
+            const abort = () =>
+              finish("The terminal changed. Text was not pasted.");
+            const finish = (error?: string) => {
+              clearTimeout(timer);
+              signal.removeEventListener("abort", abort);
+              pendingCaptures.current.delete(targetId);
+              if (error) reject(new Error(error));
+              else if (
+                signal.aborted ||
+                socket.current !== ws ||
+                visiblePane.current !== paneId
+              )
+                reject(new Error("The terminal changed. Text was not pasted."));
+              else resolve();
+            };
+            const timer = setTimeout(
+              () =>
+                finish(
+                  "Paste destination was not acknowledged. Nothing was pasted.",
+                ),
+              10000,
+            );
+            pendingCaptures.current.set(targetId, finish);
+            signal.addEventListener("abort", abort, { once: true });
+            ws.send(
+              JSON.stringify({
+                type: "capture-paste-target",
+                id: targetId,
+                paneId,
+                backend,
+              }),
+            );
+          })
+        : Promise.resolve();
+      // A caller may cancel before awaiting readiness; cancellation must not leak a rejection.
+      void captured.catch(() => {});
       return {
         signal,
+        ready: captured,
         async paste(text) {
-          if (signal.aborted || ws.readyState !== WebSocket.OPEN)
+          if (backend === "pi") await captured;
+          if (
+            signal.aborted ||
+            socket.current !== ws ||
+            visiblePane.current !== paneId ||
+            ws.readyState !== WebSocket.OPEN
+          )
             throw new Error("The terminal changed. Text was not pasted.");
           if (!term.current?.modes.bracketedPasteMode)
             throw new Error(
@@ -121,8 +169,13 @@ export function Terminal(props: {
           if (!data) throw new Error("No text was pasted.");
           const id = crypto.randomUUID();
           return new Promise<void>((resolve, reject) => {
+            const abort = () =>
+              finish(
+                "The terminal changed before delivery was confirmed. Check delivery before resending.",
+              );
             const finish = (error?: string) => {
               clearTimeout(timer);
+              signal.removeEventListener("abort", abort);
               pending.current.delete(id);
               if (error) reject(new Error(error));
               else resolve();
@@ -133,6 +186,8 @@ export function Terminal(props: {
               );
             }, 10000);
             pending.current.set(id, finish);
+            if (backend === "pi")
+              signal.addEventListener("abort", abort, { once: true });
             ws.send(
               JSON.stringify({
                 type: "paste",
@@ -142,6 +197,7 @@ export function Terminal(props: {
                 paneId,
                 opencodeOnly: backend === "opencode",
                 backend,
+                targetId,
               }),
             );
           });
@@ -260,6 +316,9 @@ export function Terminal(props: {
           visiblePane.current = msg.paneId;
           latest.current.onPane(msg.paneId);
         }
+      }
+      if (msg.type === "paste-target-ack") {
+        pendingCaptures.current.get(msg.id)?.(msg.error);
       }
       if (msg.type === "input-ack") {
         pending.current.get(msg.id)?.(msg.error);

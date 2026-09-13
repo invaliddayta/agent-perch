@@ -292,6 +292,9 @@ export function App() {
         );
       transfer.current = true;
       setProgress(dictation ? "Pasting dictation..." : "Uploading image...");
+      await target.ready;
+      if (target.signal.aborted)
+        throw new Error("The terminal changed. Text was not pasted.");
       for (const item of dictation ? [content] : content) {
         let text: string;
         if (typeof item === "string") text = item;

@@ -3,9 +3,13 @@ import {
   backends,
   backendFromArgv,
   paneBackend,
+  piProcessIdentity,
   terminalCommand,
 } from "../server/backends";
 import type { Pane } from "../src/types";
+import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 test("all backend availability depends only on executable presence", () => {
   const options = backends({
@@ -96,6 +100,47 @@ test("recognition identifies the pinned DeepSeek process, not arbitrary Node app
   expect(
     await paneBackend({ command: "sh", dead: false } as Pane),
   ).toBeUndefined();
+});
+
+test("Pi process identity includes start time and fails closed for missing or ambiguous processes", async () => {
+  for (const pid of [0, -1, NaN, 999999999])
+    expect(await piProcessIdentity(pid)).toBeUndefined();
+  const dir = await mkdtemp(join(tmpdir(), "perch-pi-identity-"));
+  try {
+    const fakeDir = join(
+      dir,
+      "node_modules/@earendil-works/pi-coding-agent/dist",
+    );
+    await mkdir(fakeDir, { recursive: true });
+    const fake = join(fakeDir, "cli.js");
+    await writeFile(
+      fake,
+      `if (process.argv[2] === "ambiguous") { const child = Bun.spawn([process.execPath, import.meta.path], { stdout: "inherit" }); process.on("SIGTERM", async () => { child.kill(); await child.exited; process.exit(); }); } else console.log("ready"); setInterval(() => {}, 1000);`,
+    );
+    for (const ambiguous of [false, true]) {
+      const child = Bun.spawn(
+        [process.execPath, fake, ...(ambiguous ? ["ambiguous"] : [])],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      try {
+        await child.stdout.getReader().read();
+        const identity = await piProcessIdentity(child.pid);
+        if (ambiguous) expect(identity).toBeUndefined();
+        else {
+          const stat = await readFile(`/proc/${child.pid}/stat`, "utf8");
+          expect(identity).toBe(
+            `${child.pid}:${stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19]}`,
+          );
+        }
+      } finally {
+        child.kill();
+        await child.exited;
+      }
+      expect(await piProcessIdentity(child.pid)).toBeUndefined();
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("Pi initial prompts remain literal, including CLI file and option syntax", () => {

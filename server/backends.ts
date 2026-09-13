@@ -115,6 +115,46 @@ export function backendFromArgv(argv: string[]): BackendId | undefined {
     return "deepseek";
 }
 
+// Include process start time so PID reuse cannot revive an upload destination.
+export async function piProcessIdentity(
+  rootPid: number,
+): Promise<string | undefined> {
+  if (!Number.isSafeInteger(rootPid) || rootPid <= 0) return;
+  const queue = [rootPid];
+  const matches: string[] = [];
+  try {
+    for (let i = 0; i < queue.length; i++) {
+      if (i >= 16) return; // A truncated or ambiguous tree is not a safe target.
+      const pid = queue[i];
+      const stat = await readFile(`/proc/${pid}/stat`, "utf8");
+      const end = stat.lastIndexOf(")");
+      const fields = stat.slice(end + 2).split(" ");
+      const start = fields[19]; // Field 22; comm may contain spaces or parentheses.
+      if (end < 0 || !/^\d+$/.test(start || "") || fields[0] === "Z") return;
+      const argv = (await readFile(`/proc/${pid}/cmdline`, "utf8")).split("\0");
+      if (
+        stat.slice(stat.indexOf("(") + 1, end) === "pi" ||
+        backendFromArgv(argv) === "pi"
+      )
+        matches.push(`${pid}:${start}`);
+      const children = await readFile(
+        `/proc/${pid}/task/${pid}/children`,
+        "utf8",
+      );
+      queue.push(
+        ...children
+          .trim()
+          .split(/\s+/)
+          .map(Number)
+          .filter((n) => n > 0),
+      );
+    }
+    return matches.length === 1 ? matches[0] : undefined;
+  } catch {
+    return; // Exited or inaccessible identities fail closed.
+  }
+}
+
 export async function paneBackend(pane: Pane): Promise<BackendId | undefined> {
   if (pane.dead) return;
   if (

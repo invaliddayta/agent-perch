@@ -19,6 +19,7 @@ import {
   backends,
   backendDefinitions,
   paneBackend,
+  piProcessIdentity,
   terminalCommand,
 } from "./backends";
 import type { BackendId, Session } from "../src/types";
@@ -81,6 +82,8 @@ type SocketData = {
   writes?: Promise<void>;
   redraw?: ReturnType<typeof setTimeout>;
   paneId?: string;
+  pasteRevision?: number;
+  piPasteTarget?: { id: string; paneId: string; identity: string };
   opening?: Promise<void>;
   cleanup?: Promise<void>;
 };
@@ -504,6 +507,8 @@ const server = Bun.serve<SocketData>({
             (paneId, initial) => {
               if (d.closed) return;
               d.paneId = paneId;
+              d.pasteRevision = (d.pasteRevision || 0) + 1;
+              d.piPasteTarget = undefined;
               ws.send(
                 JSON.stringify({
                   type: initial ? "ready" : "pane",
@@ -557,13 +562,18 @@ const server = Bun.serve<SocketData>({
           d.proc?.terminal?.write(msg.data);
           return;
         }
-        if (msg.type === "paste") {
+        if (msg.type === "paste" || msg.type === "capture-paste-target") {
+          const capture = msg.type === "capture-paste-target";
+          const ack = capture ? "paste-target-ack" : "input-ack";
+          const revision = d.pasteRevision;
           if (
             typeof msg.id !== "string" ||
             !/^[a-zA-Z0-9-]{16,64}$/.test(msg.id) ||
-            typeof msg.data !== "string" ||
-            msg.data.length > 64000 ||
-            msg.submit !== false
+            (capture
+              ? msg.backend !== "pi" || typeof msg.paneId !== "string"
+              : typeof msg.data !== "string" ||
+                msg.data.length > 64000 ||
+                msg.submit !== false)
           )
             throw new Error("Invalid paste");
           d.writes = (d.writes || Promise.resolve()).then(async () => {
@@ -587,6 +597,21 @@ const server = Bun.serve<SocketData>({
                 throw new Error(
                   "The selected pane is no longer OpenCode. Text was not pasted.",
                 );
+              let processIdentity: string | undefined;
+              if (msg.backend === "pi") {
+                processIdentity = await piProcessIdentity(Number(pid));
+                if (
+                  !processIdentity ||
+                  (!capture &&
+                    (!d.piPasteTarget ||
+                      d.piPasteTarget.id !== msg.targetId ||
+                      d.piPasteTarget.paneId !== target ||
+                      d.piPasteTarget.identity !== processIdentity))
+                )
+                  throw new Error(
+                    "The displayed process changed. Text was not pasted.",
+                  );
+              }
               if (msg.backend !== undefined) {
                 if (!["opencode", "pi"].includes(msg.backend))
                   throw new Error("Unsupported paste backend.");
@@ -616,18 +641,43 @@ const server = Bun.serve<SocketData>({
                 throw new Error(
                   "The displayed pane changed. Review the terminal before sending.",
                 );
+              if (
+                msg.backend === "pi" &&
+                (processIdentity !== (await piProcessIdentity(Number(pid))) ||
+                  `${target}\t${pid}` !==
+                    (await tmux(
+                      "display-message",
+                      "-p",
+                      "-t",
+                      d.viewer!,
+                      "#{pane_id}\t#{pane_pid}",
+                    )) ||
+                  revision !== d.pasteRevision ||
+                  d.paneId !== target)
+              )
+                throw new Error(
+                  "The displayed process changed. Text was not pasted.",
+                );
               // The viewer may have disconnected while tmux answered the identity check.
               if (d.closed)
                 throw new Error(
                   "Terminal disconnected. Check delivery before resending.",
                 );
-              d.proc.terminal.write(msg.data);
-              ws.send(JSON.stringify({ type: "input-ack", id: msg.id }));
+              if (capture) {
+                d.piPasteTarget = {
+                  id: msg.id,
+                  paneId: target!,
+                  identity: processIdentity!,
+                };
+              } else {
+                d.proc.terminal.write(msg.data);
+              }
+              ws.send(JSON.stringify({ type: ack, id: msg.id }));
             } catch (error) {
               if (!d.closed)
                 ws.send(
                   JSON.stringify({
-                    type: "input-ack",
+                    type: ack,
                     id: msg.id,
                     error:
                       error instanceof Error ? error.message : "Input failed",
