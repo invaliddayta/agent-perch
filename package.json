@@ -2,8 +2,9 @@
   "name": "agent-perch",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.3.13",
   "license": "MIT",
-  "description": "Browser terminals for OpenCode, Codex, and DeepSeek Harness.",
+  "description": "Browser terminals for OpenCode, Codex, DeepSeek Harness, and Pi.",
   "engines": {
     "bun": ">=1.3.10"
   },

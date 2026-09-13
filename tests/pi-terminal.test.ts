@@ -59,20 +59,27 @@ test("Pi file reference paste uses a disposable native tmux viewer, rejects chan
     const port = probe.port!;
     await probe.stop(true);
     const origin = `http://127.0.0.1:${port}`;
-    server = Bun.spawn([process.execPath, "--no-env-file", "server/index.ts"], {
-      cwd: join(import.meta.dir, ".."),
-      env: {
-        PATH: process.env.PATH,
-        HOME: dir,
-        HOST: "127.0.0.1",
-        PORT: String(port),
-        TMUX_SOCKET: socket,
-        STATE_DIR: join(dir, 'state with "quotes" $()'),
-        PROJECTS_ROOT: dir,
+    server = Bun.spawn(
+      process.env.PERCH_TEST_PACKAGE_BIN
+        ? [process.env.PERCH_TEST_PACKAGE_BIN]
+        : [process.execPath, "--no-env-file", "server/index.ts"],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          PATH: process.env.PATH,
+          HOME: dir,
+          HOST: "127.0.0.1",
+          PORT: String(port),
+          TMUX_SOCKET: socket,
+          ...(process.env.PERCH_TEST_PACKAGE_BIN
+            ? { XDG_STATE_HOME: join(dir, 'state with "quotes" $()') }
+            : { STATE_DIR: join(dir, 'state with "quotes" $()') }),
+          PROJECTS_ROOT: dir,
+        },
+        stdout: "ignore",
+        stderr: "pipe",
       },
-      stdout: "ignore",
-      stderr: "pipe",
-    });
+    );
     let ready = false;
     for (let i = 0; i < 80; i++) {
       try {
@@ -94,6 +101,10 @@ test("Pi file reference paste uses a disposable native tmux viewer, rejects chan
     });
     expect(upload.status).toBe(201);
     const { path } = await upload.json();
+    if (process.env.PERCH_TEST_PACKAGE_BIN)
+      expect(path).toStartWith(
+        join(dir, 'state with "quotes" $()', "agent-perch", "images"),
+      );
     const Socket = WebSocket as unknown as new (
       url: string,
       options: { headers: Record<string, string> },
