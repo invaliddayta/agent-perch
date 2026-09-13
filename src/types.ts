@@ -1,4 +1,4 @@
-export type BackendId = "opencode" | "codex" | "deepseek";
+export type BackendId = "opencode" | "codex" | "pi" | "deepseek";
 export type AgentState = "idle" | "working" | "ready" | "attention" | "error";
 export type AgentStatus = {
   run: string;

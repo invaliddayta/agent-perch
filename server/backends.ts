@@ -31,6 +31,23 @@ export const backendDefinitions = {
       ...(prompt ? ["--", prompt] : []),
     ],
   },
+  pi: {
+    label: "Pi",
+    variable: "PI_BIN",
+    executable: "pi",
+    environment: [
+      "PI_CODING_AGENT_DIR",
+      "PI_CODING_AGENT_SESSION_DIR",
+      "PI_OFFLINE",
+      "PI_SKIP_VERSION_CHECK",
+      "PI_TELEMETRY",
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+    ],
+    // Pi still treats @arguments as files after --. A leading space keeps text literal.
+    args: (_directory: string, prompt: string) =>
+      prompt ? ["--", prompt.startsWith("@") ? " " + prompt : prompt] : [],
+  },
   deepseek: {
     label: "DeepSeek Harness",
     variable: "DEEPSEEK_BIN",
@@ -72,12 +89,20 @@ export function terminalCommand(
     "--",
     executable,
     ...extraArgs,
-    ...(args?.(directory, prompt.trim()) || []),
+    ...(args?.(directory, backend === "pi" ? prompt : prompt.trim()) || []),
   ];
 }
 
 export function backendFromArgv(argv: string[]): BackendId | undefined {
   const executable = basename(argv[0] || "");
+  if (executable === "pi") return "pi";
+  if (
+    ["node", "bun"].includes(executable) &&
+    /^.*\/node_modules\/@(?:earendil-works|mariozechner)\/pi-coding-agent\/dist\/(?:bundle\/)?cli\.js$/.test(
+      argv[1] || "",
+    )
+  )
+    return "pi";
   if (executable === "codex") return "codex";
   // The pinned Nix launcher execs Node. Never classify arbitrary Node apps as agents.
   if (
@@ -92,9 +117,14 @@ export function backendFromArgv(argv: string[]): BackendId | undefined {
 
 export async function paneBackend(pane: Pane): Promise<BackendId | undefined> {
   if (pane.dead) return;
-  if (pane.command === "opencode" || pane.command === "codex")
+  if (
+    pane.command === "opencode" ||
+    pane.command === "codex" ||
+    pane.command === "pi"
+  )
     return pane.command;
-  if (!["node", "dsh-tui", "dsh"].includes(pane.command) || !pane.pid) return;
+  if (!["node", "bun", "dsh-tui", "dsh"].includes(pane.command) || !pane.pid)
+    return;
   // CLI wrappers may retain a parent process. Bound the read-only process walk.
   const queue = [pane.pid];
   for (let i = 0; i < queue.length && i < 16; i++) {

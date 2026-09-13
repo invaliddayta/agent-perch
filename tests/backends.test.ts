@@ -12,9 +12,15 @@ test("all backend availability depends only on executable presence", () => {
     OPENCODE_BIN: process.execPath,
     CODEX_BIN: process.execPath,
     DEEPSEEK_BIN: "/missing/dsh-tui",
+    PI_BIN: process.execPath,
   });
-  expect(options.map((b) => b.available)).toEqual([true, true, false]);
-  expect(options.map((b) => b.initialPrompt)).toEqual([true, true, false]);
+  expect(options.map((b) => b.available)).toEqual([true, true, true, false]);
+  expect(options.map((b) => b.initialPrompt)).toEqual([
+    true,
+    true,
+    true,
+    false,
+  ]);
 });
 
 test("terminal launch keeps prompt text literal and preserves agent safety defaults", () => {
@@ -90,4 +96,47 @@ test("recognition identifies the pinned DeepSeek process, not arbitrary Node app
   expect(
     await paneBackend({ command: "sh", dead: false } as Pane),
   ).toBeUndefined();
+});
+
+test("Pi initial prompts remain literal, including CLI file and option syntax", () => {
+  for (const prompt of [
+    "@private.txt",
+    "--no-approve",
+    "  ordinary  ",
+    "first\nsecond",
+    "",
+    " ",
+    "$(touch nope)",
+  ]) {
+    const command = terminalCommand("pi", "/work with spaces", prompt, {
+      PI_BIN: process.execPath,
+    });
+    expect(command.slice(1)).toEqual([
+      "--",
+      process.execPath,
+      ...(prompt ? ["--", prompt.startsWith("@") ? " " + prompt : prompt] : []),
+    ]);
+  }
+  for (const scope of ["earendil-works", "mariozechner"]) {
+    expect(
+      backendFromArgv([
+        "node",
+        `/opt/node_modules/@${scope}/pi-coding-agent/dist/cli.js`,
+      ]),
+    ).toBe("pi");
+    expect(
+      backendFromArgv([
+        "node",
+        `/opt/node_modules/@${scope}/pi-coding-agent/dist/bundle/cli.js`,
+      ]),
+    ).toBe("pi");
+  }
+  expect(
+    backendFromArgv([
+      "node",
+      "/app/cli.js",
+      "/opt/node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+    ]),
+  ).toBeUndefined();
+  expect(backendFromArgv(["pi"])).toBe("pi");
 });

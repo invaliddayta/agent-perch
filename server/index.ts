@@ -574,19 +574,44 @@ const server = Bun.serve<SocketData>({
                 );
               if (!d.control)
                 throw new Error("Terminal is read-only. Text was not sent.");
-              const [target, command] = (
+              const [target, command, pid] = (
                 await tmux(
                   "display-message",
                   "-p",
                   "-t",
                   d.viewer!,
-                  "#{pane_id}\t#{pane_current_command}",
+                  "#{pane_id}\t#{pane_current_command}\t#{pane_pid}",
                 )
               ).split("\t");
               if (msg.opencodeOnly && command !== "opencode")
                 throw new Error(
                   "The selected pane is no longer OpenCode. Text was not pasted.",
                 );
+              if (msg.backend !== undefined) {
+                if (!["opencode", "pi"].includes(msg.backend))
+                  throw new Error("Unsupported paste backend.");
+                const backend = await paneBackend({
+                  id: target!,
+                  command: command!,
+                  pid: Number(pid),
+                  dead: false,
+                } as import("../src/types").Pane);
+                if (backend !== msg.backend)
+                  throw new Error(
+                    "The selected agent changed. Text was not pasted.",
+                  );
+                const identity = await tmux(
+                  "display-message",
+                  "-p",
+                  "-t",
+                  d.viewer!,
+                  "#{pane_id}\t#{pane_pid}",
+                );
+                if (identity !== `${target}\t${pid}`)
+                  throw new Error(
+                    "The displayed process changed. Text was not pasted.",
+                  );
+              }
               if (msg.paneId && msg.paneId !== target)
                 throw new Error(
                   "The displayed pane changed. Review the terminal before sending.",

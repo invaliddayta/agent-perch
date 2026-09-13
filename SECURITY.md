@@ -12,7 +12,7 @@
 - Restrict the network/proxy policy to people and devices you trust with that account. A tailnet is not automatically a one-person network.
 - Host/Origin checks and mutation headers block cross-site requests. They do not authenticate users.
 - Paths use the account's filesystem permissions. `PROJECTS_ROOT` is a base for relative paths, not a boundary. Agents can access what their account can access.
-- Treat `OPENCODE_BIN`, `CODEX_BIN`, `DEEPSEEK_BIN`, wrapper scripts, and the service's `PATH` as trusted configuration. Don't let untrusted users replace those executables.
+- Treat `OPENCODE_BIN`, `CODEX_BIN`, `DEEPSEEK_BIN`, `PI_BIN`, wrapper scripts, and the service's `PATH` as trusted configuration. Don't let untrusted users replace those executables.
 
 ## Data
 
@@ -26,7 +26,7 @@ Native attention adapters store only coarse states and random event IDs in tmux 
 
 The browser remembers the speech-startup preference, not recordings. Background preparation never requests microphone access. Threaded WASM requires cross-origin isolation; only speech-worker/pthread script responses permit Emscripten's `unsafe-eval`. The main page keeps its stricter CSP and same-origin connection policy.
 
-Pasted images are uploaded to private files under `STATE_DIR/images`, not served as public web files. Files older than 24 hours are removed on a later upload, not by a scheduled expiry job. OpenCode may keep submitted attachments in its own history. See [image handling](docs/guide.md#clipboard-images).
+Pasted images are uploaded to private files under `STATE_DIR/images`, not served as public web files. Files older than 24 hours are removed on a later upload, not by a scheduled expiry job. OpenCode may keep submitted attachments in its own history. Pi receives a host file reference and may read it with its native tools after manual submission. Pi lifecycle integration is opt-in and observes only coarse events, never approval decisions. See [image handling](docs/guide.md#clipboard-images).
 
 ## Reporting
 

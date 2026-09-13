@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A small, hackable browser terminal for your coding agents.</strong><br>
-  OpenCode, Codex, DeepSeek Harness. Your machine. Your tmux sessions.
+  OpenCode, Codex, DeepSeek Harness, Pi. Your machine. Your tmux sessions.
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@ bun run build
 bun run start
 ```
 
-Open **http://localhost:4310/**. All three agents launch as native CLIs. No separate OpenCode API server, database integration, or session metadata to set up.
+Open **http://localhost:4310/**. All four agents launch as native CLIs. No separate OpenCode API server, database integration, or session metadata to set up.
 
 **New session** takes a path, not a pre-registered project. `/work/app`, `~/src/app`, and relative paths all work. Check the box to create a missing directory. Leave the name blank to use the directory name. No repository scaffolding or surprise `git init`.
 
@@ -54,6 +54,8 @@ For another device, follow the [private HTTPS setup](docs/guide.md#private-remot
 | Turn-finished / attention indicators | Native events | Native notifications | Native events |
 | Compact / continue, approval controls | Use the TUI | Use the TUI | Use the TUI |
 | Dictation and image paste | Yes | Not yet | Not yet |
+
+**Pi** also launches as a native TUI with literal starting prompts, optional lifecycle indicators, and non-submitting image file references (not automatic image attachments). [Pi setup and limits](docs/backends.md#pi).
 
 Session search, pins, physical keyboards, mobile touch keys, and supported clipboard text writes work across the terminal layer. **Ctrl+Alt+S** opens the switcher. Your agent's approval controls stay in its own TUI; Perch doesn't turn them off.
 

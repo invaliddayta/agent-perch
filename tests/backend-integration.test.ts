@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import type { Snapshot } from "../src/types";
 import { MODEL_PATH, RUNTIME_PATH } from "../src/speech-model";
 
-test("all three CLIs launch without an OpenCode API or database; static files stay confined", async () => {
+test("all four CLIs launch without an OpenCode API or database; static files stay confined", async () => {
   const dir = await mkdtemp(join(tmpdir(), "perch-backends-"));
   const socket = join(dir, "tmux.sock");
   const run = async (...args: string[]) => {
@@ -93,6 +93,8 @@ setInterval(() => {}, 1000);
         OPENCODE_URL: "http://127.0.0.1:1",
         OPENCODE_DB_PATH: join(dir, "missing.db"),
         OPENCODE_BIN: fixture,
+        PI_BIN: fixture,
+        PI_CODING_AGENT_DIR: join(dir, "home"),
         CODEX_HOME: join(dir, "codex"),
         DSH_HOME: join(dir, "dsh"),
         CODEX_BIN: process.env.PERCH_TEST_CODEX_BIN || fixture,
@@ -115,6 +117,7 @@ setInterval(() => {}, 1000);
       }
     }
     expect(snapshot?.backends.map((b) => b.available)).toEqual([
+      true,
       true,
       true,
       true,
@@ -270,7 +273,7 @@ setInterval(() => {}, 1000);
         await stat(join(dir, "home", "not-created")).catch(() => null),
       ).toBeNull();
     }
-    for (const backend of ["opencode", "codex", "deepseek"] as const) {
+    for (const backend of ["opencode", "codex", "pi", "deepseek"] as const) {
       const real =
         backend === "codex"
           ? process.env.PERCH_TEST_CODEX_BIN
@@ -292,7 +295,7 @@ setInterval(() => {}, 1000);
       expect(await run("show-environment", "-t", result.id, "HOME")).toBe(
         `HOME=${join(dir, "home")}`,
       );
-      if (backend !== "opencode") {
+      if (backend === "codex" || backend === "deepseek") {
         const variable = backend === "codex" ? "CODEX_HOME" : "DSH_HOME";
         expect(await run("show-environment", "-t", result.id, variable)).toBe(
           `${variable}=${join(dir, backend === "codex" ? "codex" : "dsh")}`,
@@ -348,18 +351,20 @@ setInterval(() => {}, 1000);
           JSON.stringify(
             backend === "opencode"
               ? [join(dir, "project with spaces"), `--prompt=${prompt}`]
-              : [
-                  "--config",
-                  "tui.notifications=true",
-                  "--config",
-                  'tui.notification_method="osc9"',
-                  "--config",
-                  'tui.notification_condition="always"',
-                  "--cd",
-                  join(dir, "project with spaces"),
-                  "--",
-                  prompt,
-                ],
+              : backend === "pi"
+                ? [prompt]
+                : [
+                    "--config",
+                    "tui.notifications=true",
+                    "--config",
+                    'tui.notification_method="osc9"',
+                    "--config",
+                    'tui.notification_condition="always"',
+                    "--cd",
+                    join(dir, "project with spaces"),
+                    "--",
+                    prompt,
+                  ],
           ),
         );
         expect(await Bun.file(join(dir, "injected")).exists()).toBe(false);

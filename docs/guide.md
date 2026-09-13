@@ -2,7 +2,7 @@
 
 [Overview](../README.md) / [First run](../START_HERE.md) / **Manual** / [Agent setup](backends.md) / [Verification](verification.md)
 
-Perch connects a browser to tmux on a Linux host. All three agents run as native CLIs. tmux owns the sessions; agents own conversations, approvals, and compaction. Perch is the window, not the foreman.
+Perch connects a browser to tmux on a Linux host. All four agents run as native CLIs. tmux owns the sessions; agents own conversations, approvals, and compaction. Perch is the window, not the foreman.
 
 **Jump to:** [Setup](#quick-start) / [Daily use](#daily-use) / [Speech](#private-voice) / [Configuration](#configuration) / [Operations](#operations)
 
@@ -112,7 +112,7 @@ The passive tmux control client does not change global clipboard settings or rep
 
 ### Clipboard Images
 
-Image paste remains OpenCode-only. Ctrl/Cmd+V uploads an image to a private host file and pastes its path into the active OpenCode prompt, without pressing Enter. Review the attachment before sending.
+Ctrl/Cmd+V uploads an image to a private host file and pastes a file reference into the active OpenCode or Pi prompt, without pressing Enter. Review before sending. Pi receives a quoted host path, not image bytes; it must read the file using its native tools. [Pi semantics](backends.md#pi).
 
 Programmatic paste never appends Enter. The terminal protocol retains `submit: false` for already-open clients and rollback; `submit: true` is rejected before writing input. Ordinary terminal keystrokes remain separate from guarded paste.
 
@@ -162,7 +162,7 @@ In another shell run `PORT=14310 bun run dev`. Vite proxies to that backend. Age
 | --- | --- |
 | `PUBLIC_ORIGIN` | Exact browser-facing origin; private HTTPS remotely |
 | `PORT` | Loopback port, default `4310` |
-| `OPENCODE_BIN` / `CODEX_BIN` / `DEEPSEEK_BIN` | CLI executable path or PATH name |
+| `OPENCODE_BIN` / `CODEX_BIN` / `DEEPSEEK_BIN` / `PI_BIN` | CLI executable path or PATH name |
 | `CODEX_HOME` / `DSH_HOME` | Optional absolute agent config/history directories |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` | Optional provider keys in the private service environment |
 | `PROJECTS_ROOT` | Base for relative session paths, default home; not a sandbox |

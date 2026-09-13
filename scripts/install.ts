@@ -70,6 +70,10 @@ if (import.meta.main) {
         "OPENCODE_BIN",
         "CODEX_BIN",
         "DEEPSEEK_BIN",
+        "PI_BIN",
+        "PI_CODING_AGENT_DIR",
+        "PI_CODING_AGENT_SESSION_DIR",
+        "PI_ATTENTION",
         "CODEX_HOME",
         "DSH_HOME",
       ])

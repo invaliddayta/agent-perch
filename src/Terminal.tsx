@@ -17,7 +17,7 @@ export type PasteTarget = {
 };
 export type TerminalHandle = {
   key(data: string): boolean;
-  capturePasteTarget(): PasteTarget;
+  capturePasteTarget(backend?: "opencode" | "pi"): PasteTarget;
   cancelPaste(): void;
   focus(): void;
   copy(): Promise<void>;
@@ -90,7 +90,7 @@ export function Terminal(props: {
   useImperativeHandle(ref, () => ({
     key: send,
     cancelPaste,
-    capturePasteTarget() {
+    capturePasteTarget(backend = "opencode") {
       const ws = socket.current;
       const paneId = visiblePane.current;
       if (
@@ -99,7 +99,7 @@ export function Terminal(props: {
         !paneId ||
         ws?.readyState !== WebSocket.OPEN
       )
-        throw new Error("Open a connected OpenCode prompt before pasting.");
+        throw new Error("Open a connected supported prompt before pasting.");
       const { signal } = (pasteLifetime.current ??= new AbortController());
       return {
         signal,
@@ -108,7 +108,7 @@ export function Terminal(props: {
             throw new Error("The terminal changed. Text was not pasted.");
           if (!term.current?.modes.bracketedPasteMode)
             throw new Error(
-              "The pane is not accepting bracketed paste. Review the OpenCode prompt before trying again.",
+              "The pane is not accepting bracketed paste. Review the agent prompt before trying again.",
             );
           pasteCapture.current = "";
           let data: string;
@@ -140,7 +140,8 @@ export function Terminal(props: {
                 submit: false,
                 id,
                 paneId,
-                opencodeOnly: true,
+                opencodeOnly: backend === "opencode",
+                backend,
               }),
             );
           });

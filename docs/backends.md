@@ -4,12 +4,13 @@
 
 All agents share the terminal viewer, session switcher, keyboard input, and supported clipboard text writes. Their own approval prompts and shortcuts still apply. Perch doesn't bypass those controls.
 
-All three agents run as native terminal programs. Perch observes native events for newly launched sessions, without reading conversation databases, running a separate agent API server, or adding anything to prompts. It does not compact conversations or make approval decisions. Dictation and image-path paste remain OpenCode-only because delivery checks depend on its prompt accepting bracketed paste.
+All four agents run as native terminal programs. Perch observes native events for newly launched sessions, without reading conversation databases, running a separate agent API server, or adding anything to prompts. It does not compact conversations or make approval decisions. Dictation remains OpenCode-only. Image file references can be pasted into OpenCode or Pi with guarded bracketed paste.
 
 | Agent | Executable | Starting prompt | Native signal |
 | --- | --- | --- | --- |
 | OpenCode | `opencode` | Supported | Root lifecycle, permissions, questions |
 | Codex | `codex` | Supported | Generic needs-attention notification |
+| Pi | `pi` | Supported | Optional settled-run and blocking extension UI events |
 | DeepSeek Harness | `dsh-tui` | Enter in the TUI | Root lifecycle and approval events |
 
 > [!NOTE]
@@ -45,6 +46,18 @@ New launches enable Codex's first-party TUI notifications using runtime-only `--
 
 Observer startup, retry, and dead-pane cleanup belong to the server, independently of session-list requests. Restarting the web service reattaches observers for still-valid tagged panes; it does not instrument older untagged agents or replay notifications missed during downtime.
 
+## Pi
+
+Install and authenticate [Pi](https://pi.dev/) separately. `PI_BIN` is a literal executable path or PATH name (default `pi`). Perch launches the native interactive CLI in the requested directory, never RPC, JSON mode, ACP, or a separate agent server. Existing Pi panes are recognized by the native `pi` process title or the known Node/Bun CLI entry path; arbitrary Node applications are not agents.
+
+Starting prompts use `--` to stop option parsing. Pi still interprets `@` arguments as files after `--`, so Perch prefixes an `@`-leading prompt with one space. Other whitespace and newlines are preserved. This is an initial prompt and Pi may run it after its native startup/trust flow, just like a CLI prompt. No approval/trust override flags are added. Pi has no built-in sandbox or general tool permission popups; any user-installed approval extensions remain in control.
+
+Set `PI_ATTENTION=1` to opt new launches into the bundled local `--extension` adapter. The verified API is Pi **0.85.1**: `agent_start`, `message_end`, `agent_settled`, `ui_prompt_start`, and `ui_prompt_end`. Only a settled successful assistant stop yields **Turn finished**; aborted or tool-only endings do not. Blocking extension UI yields generic **Needs attention**, not an inferred approval request. No prompts, titles, tool arguments, or message content are stored. Older Pi versions may lack events; leave the integration disabled if unsupported. User/global/project extensions and config are preserved. No adapter/package download or profile installation is performed.
+
+Image paste inserts a **host image file reference**, not image bytes or an automatic attachment. This matches Pi's native clipboard path workflow: review and submit manually, then Pi must read the file with its native tool. JSON quoting delimits paths containing spaces or quotes (it is not a shell command); terminal control characters in paths are rejected. The browser does not send Ctrl+V to a remote host clipboard. Existing read/approval policies and image-capable model requirements still apply.
+
+`PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` may select existing private external config/session directories. Never put credentials or host-specific paths into the repository. Perch does not configure Pi's tmux key settings or restart tmux; see Pi's own tmux documentation for optional extended-key configuration.
+
 ## DeepSeek Harness
 
 The launcher is **`dsh-tui`**. The independent [dsh-tui Nix package](https://github.com/invaliddayta/dsh-tui-nix) packages the Harness and TUI from pinned sources for Linux ARM64 and x86-64. Follow that repository's installation instructions; Perch does not build or install it for you.
@@ -61,6 +74,8 @@ DeepSeek runs directly in the supplied directory. Perch passes a launch-scoped `
 | --- | --- |
 | `OPENCODE_BIN` | Executable path or PATH name; defaults to `opencode` |
 | `CODEX_BIN` | Executable path or PATH name; defaults to `codex` |
+| `PI_BIN` | Executable path or PATH name; defaults to `pi` |
+| `PI_ATTENTION` | `1` enables the optional local Pi lifecycle adapter |
 | `DEEPSEEK_BIN` | Executable path or PATH name; defaults to `dsh-tui` |
 | `CODEX_HOME` | Optional Codex config/auth directory; use an existing absolute directory |
 | `DSH_HOME` | Optional DeepSeek profile/history directory; use an absolute path |

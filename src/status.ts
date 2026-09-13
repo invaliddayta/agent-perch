@@ -11,7 +11,7 @@ export function paneStatus(
   if (
     !/^[a-f0-9-]{36}$/.test(run) ||
     ownerPid !== pid ||
-    !["opencode", "codex", "deepseek"].includes(backend)
+    !["opencode", "codex", "pi", "deepseek"].includes(backend)
   )
     return;
   const state = value?.startsWith(run + ":") ? value.slice(37) : "";
