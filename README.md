@@ -28,6 +28,8 @@ Perch puts your tmux sessions in a browser. Attach to something already running,
 
 You need **Linux**, **Bun 1.3.10+**, and **tmux 3.3+**. Install and authenticate whichever agent CLI you want to launch. Existing tmux sessions work without installing another agent.
 
+Nix users can use `nix build` / `nix run` from the checkout; see [the pinned package and external state](docs/nix.md). Versioned releases provide a [prebuilt runtime archive](docs/release.md#versioned-fork-releases).
+
 From the checkout:
 
 ```sh
