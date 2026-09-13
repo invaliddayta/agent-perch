@@ -2,7 +2,7 @@
 
 [Overview](../README.md) / [First run](../START_HERE.md) / **Manual** / [Agent setup](backends.md) / [Verification](verification.md)
 
-Perch connects a browser to tmux on a Linux host. All three agents run as native CLIs. tmux owns the sessions; agents own conversations, approvals, and compaction. Perch is the window, not the foreman.
+Perch connects a browser to tmux on a Linux host. All four agents run as native CLIs. tmux owns the sessions; agents own conversations, approvals, and compaction. Perch is the window, not the foreman.
 
 **Jump to:** [Setup](#quick-start) / [Daily use](#daily-use) / [Speech](#private-voice) / [Configuration](#configuration) / [Operations](#operations)
 
@@ -40,7 +40,9 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:4310
 
 Set `PUBLIC_ORIGIN` in `.env` to the exact HTTPS origin reported, then restart only `agent-watch.service`. If you change `PORT`, change the Serve target too.
 
-Use **Serve, never Funnel**. Restrict your tailnet policy to trusted users/devices. The installer does not configure network policy or firewall rules. Another private/authenticated proxy is fine if it preserves Host/Origin and supports WebSocket upgrades.
+Use **Serve, never Funnel**. Restrict your tailnet policy to trusted users/devices. The installer does not configure network policy or firewall rules. Another private/authenticated proxy is fine. Terminate TLS and authenticate **every** route at the proxy, including `/terminal` WebSocket handshakes; proxy to plain internal HTTP (`http://127.0.0.1:4310`). Perch does not implement TLS or login. Preserve the browser's `Origin`, forward the public `Host`, and support HTTP/1.1 `Upgrade` / `Connection` WebSocket forwarding with suitable idle timeouts. Set `PUBLIC_ORIGIN` to the exact external HTTPS origin. Preserve CSP and COOP/COEP response headers. Do not strip or spoof Origin to bypass rejection.
+
+`HOST` changes only the listener (default `127.0.0.1`); `PORT` defaults to `4310`. A non-loopback listener is appropriate only when a separately firewalled internal proxy must reach it. It must never allow clients to bypass proxy authentication. Setting `HOST=0.0.0.0` does not authorize any additional browser origins. Prefer loopback on a single host; no deployment or firewall changes are made by Perch.
 
 ### Browser Installation
 
@@ -86,7 +88,7 @@ Closing a tab or losing the network leaves the agent running. Reconnect creates 
 
 ### Agent Attention
 
-New sessions launched from Perch have native event observation. **Turn finished** means a successfully completed root turn was observed. **Needs attention** can mean a question, approval, or a Codex turn-completion notification; inspect the TUI before deciding what to do. **Agent error** is available when the backend emits the corresponding event. No event changes prompts, submits input, grants permissions, or resumes work automatically.
+New OpenCode/Codex/DSH sessions launched from Perch have native event observation. Pi observation is opt-in with `PI_ATTENTION=1` for Pi 0.85.1; see [Pi setup](backends.md#pi). **Turn finished** means a successfully completed root turn was observed. **Needs attention** can mean a question, approval, or a Codex turn-completion notification; inspect the TUI before deciding what to do. **Agent error** is available when the backend emits the corresponding event. No event changes prompts, submits input, grants permissions, or resumes work automatically.
 
 Unread events appear as a dot in the session list, an in-app banner, and a session count in the tab title and switcher button. **Open terminal** opens the relevant session/window; **Mark seen** acknowledges the displayed event. Switching sessions does not silently dismiss it. Acknowledgments persist locally and synchronize between tabs on the same browser origin, not between devices.
 
@@ -112,7 +114,7 @@ The passive tmux control client does not change global clipboard settings or rep
 
 ### Clipboard Images
 
-Image paste remains OpenCode-only. Ctrl/Cmd+V uploads an image to a private host file and pastes its path into the active OpenCode prompt, without pressing Enter. Review the attachment before sending.
+Ctrl/Cmd+V uploads an image to a private host file and pastes a file reference into the active OpenCode or Pi prompt, without pressing Enter. Review before sending. Pi receives a quoted host path, not image bytes; it must read the file using its native tools. [Pi semantics](backends.md#pi).
 
 Programmatic paste never appends Enter. The terminal protocol retains `submit: false` for already-open clients and rollback; `submit: true` is rejected before writing input. Ordinary terminal keystrokes remain separate from guarded paste.
 
@@ -161,8 +163,9 @@ In another shell run `PORT=14310 bun run dev`. Vite proxies to that backend. Age
 | Variable | Purpose |
 | --- | --- |
 | `PUBLIC_ORIGIN` | Exact browser-facing origin; private HTTPS remotely |
-| `PORT` | Loopback port, default `4310` |
-| `OPENCODE_BIN` / `CODEX_BIN` / `DEEPSEEK_BIN` | CLI executable path or PATH name |
+| `HOST` | Listen address, default `127.0.0.1`; not an allowed-origin setting |
+| `PORT` | Listen port, default `4310` |
+| `OPENCODE_BIN` / `CODEX_BIN` / `DEEPSEEK_BIN` / `PI_BIN` | CLI executable path or PATH name |
 | `CODEX_HOME` / `DSH_HOME` | Optional absolute agent config/history directories |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` | Optional provider keys in the private service environment |
 | `PROJECTS_ROOT` | Base for relative session paths, default home; not a sandbox |

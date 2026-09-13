@@ -44,6 +44,12 @@ export async function statusLaunch(
       "--config",
       'tui.notification_condition="always"',
     );
+  } else if (backend === "pi") {
+    if (env.PI_ATTENTION === "1")
+      args.push(
+        "--extension",
+        resolve(import.meta.dir, "../integrations/pi.mjs"),
+      );
   } else {
     const directory = join(stateDir, "integrations");
     await mkdir(directory, { recursive: true, mode: 0o700 });

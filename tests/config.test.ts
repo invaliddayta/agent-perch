@@ -24,6 +24,8 @@ test("configuration derives portable defaults without an OpenCode service", () =
     },
     "/work/perch",
   );
+  expect(config.host).toBe("127.0.0.1");
+  expect(config.port).toBe(4310);
   expect(config.projectsRoot).toBe("/users/tester");
   expect(config.stateDir).toBe("/work/perch/.state");
   expect(config.publicOrigin).toBeUndefined();
@@ -164,4 +166,23 @@ test("installer is inert in dry run, preserves private config, and only installs
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+});
+
+test("HOST changes the listener only, never origin authorization", () => {
+  for (const HOST of ["0.0.0.0", "::", "127.0.0.2", "localhost"]) {
+    const config = readConfig({ HOST });
+    expect(config.host).toBe(HOST);
+    expect([...config.origins]).toEqual([
+      "http://127.0.0.1:4310",
+      "http://localhost:4310",
+    ]);
+  }
+  for (const HOST of [
+    "http://localhost",
+    "localhost:4310",
+    "bad\nhost",
+    " /tmp/socket",
+    "[::1]",
+  ])
+    expect(() => readConfig({ HOST })).toThrow("HOST");
 });

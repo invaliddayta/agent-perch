@@ -22,3 +22,11 @@ jobs:
       - run: bun run check
       - run: bun test --no-env-file
       - run: bun run build
+
+  nix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix build --print-build-logs

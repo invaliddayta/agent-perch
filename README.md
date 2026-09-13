@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A small, hackable browser terminal for your coding agents.</strong><br>
-  OpenCode, Codex, DeepSeek Harness. Your machine. Your tmux sessions.
+  OpenCode, Codex, DeepSeek Harness, Pi. Your machine. Your tmux sessions.
 </p>
 
 <p align="center">
@@ -28,6 +28,8 @@ Perch puts your tmux sessions in a browser. Attach to something already running,
 
 You need **Linux**, **Bun 1.3.10+**, and **tmux 3.3+**. Install and authenticate whichever agent CLI you want to launch. Existing tmux sessions work without installing another agent.
 
+Nix users can use `nix build` / `nix run` from the checkout; see [the pinned package and external state](docs/nix.md). Versioned releases provide a [prebuilt runtime archive](docs/release.md#versioned-fork-releases).
+
 From the checkout:
 
 ```sh
@@ -36,7 +38,7 @@ bun run build
 bun run start
 ```
 
-Open **http://localhost:4310/**. All three agents launch as native CLIs. No separate OpenCode API server, database integration, or session metadata to set up.
+Open **http://localhost:4310/**. All four agents launch as native CLIs. No separate OpenCode API server, database integration, or session metadata to set up.
 
 **New session** takes a path, not a pre-registered project. `/work/app`, `~/src/app`, and relative paths all work. Check the box to create a missing directory. Leave the name blank to use the directory name. No repository scaffolding or surprise `git init`.
 
@@ -55,11 +57,13 @@ For another device, follow the [private HTTPS setup](docs/guide.md#private-remot
 | Compact / continue, approval controls | Use the TUI | Use the TUI | Use the TUI |
 | Dictation and image paste | Yes | Not yet | Not yet |
 
+**Pi** also launches as a native TUI with literal starting prompts, optional lifecycle indicators, and non-submitting image file references (not automatic image attachments). [Pi setup and limits](docs/backends.md#pi).
+
 Session search, pins, physical keyboards, mobile touch keys, and supported clipboard text writes work across the terminal layer. **Ctrl+Alt+S** opens the switcher. Your agent's approval controls stay in its own TUI; Perch doesn't turn them off.
 
 The **red X** beside each session opens a confirmation before killing it. Closing a browser tab still leaves the agent running; confirming **Kill session** does not.
 
-New sessions have **native attention indicators** that stay unread until **Mark seen**. OpenCode and DSH expose lifecycle events; Codex notifications produce generic **Needs attention** indicators. Observation does not require an open viewer. Existing uninstrumented agents are left alone. **No status** is not a claim that an agent is idle. [Details and limits](docs/guide.md#agent-attention).
+New OpenCode/Codex/DSH sessions, and Pi sessions with `PI_ATTENTION=1`, have **native attention indicators** that stay unread until **Mark seen**. OpenCode and DSH expose lifecycle events; Codex notifications produce generic **Needs attention** indicators. Observation does not require an open viewer. Existing uninstrumented agents are left alone. **No status** is not a claim that an agent is idle. [Details and limits](docs/guide.md#agent-attention).
 
 The compact, flat UI uses a locally served Proggy Clean font, with larger touch controls on phones. The terminal keeps its own readable, adjustable font. No web-font CDN.
 

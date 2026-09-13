@@ -2,7 +2,7 @@
 
 [Overview](../README.md) / [Manual](guide.md) / **Verification** / [Release checklist](release.md)
 
-**Checked on 2026-09-09.** This page describes the current implementation, not a running history of old releases.
+**Fork checks: 2026-09-13.** The table and fork section below describe local results; the deployment and speech measurements are retained upstream observations from 2026-09-09, not deployments or model runs performed for this fork.
 
 > [!NOTE]
 > Local tests are evidence, not a hosted CI badge or a security audit. Hardware microphones, physical phones, and authenticated model tasks are separate checks.
@@ -12,12 +12,21 @@
 | Check | Result | Boundary |
 | --- | --- | --- |
 | TypeScript and production build | Pass | Existing large-chunk warning remains |
-| Bun suite | **82 pass / 941 assertions**, 1 optional skip | 18 files; isolated sockets and inert agents |
+| Bun suite | **91 pass / 1066 assertions**, 1 optional skip | 21 files; isolated sockets and inert agents |
 | Dependency audit | No vulnerabilities reported | Current lockfile, not a supply-chain guarantee |
 | Privacy checks | Gitleaks 8.30.1: no credential matches | Physical checkout, history, and decoded Git objects; device references and screenshots reviewed separately |
-| Browser regressions | **12 groups pass** | Real React/xterm; mocked transports, capture, inference |
+| Browser regressions | **13 groups pass** | Real React/xterm; mocked transports, capture, inference |
 | Real English inference | Pass | Public audio fixtures, no hardware microphone |
-| Hosted GitHub Actions | Not run | No remote configured yet |
+| Hosted GitHub Actions | PR Bun and Nix checks pass | Tag-triggered release workflow has not run |
+| Nix package | Pass, Linux x86-64 and ARM64 | Contributor validated x86-64; maintainer built and smoke-tested ARM64 during PR review |
+
+### Fork Validation Boundaries
+
+Pi integration was based on the installed **0.85.1** documentation and actual CLI parser, clipboard implementation, extension loader, and process-title code. The installed parser passed literal `@`, leading-option, whitespace and newline cases without launching Pi. The installed extension loader accepted the local adapter and registered all six intended hooks without a session or provider. Lifecycle unit tests use fake events; native terminal integration tests use inert agents on disposable tmux sockets.
+
+Pi images are **host file references**, not automatically attached image bytes. Tests cover quoted paths, control-character rejection, backend/target changes, upload cleanup, bracketed paste, and no Enter. Headless Chromium ran all 13 real React/xterm fixture groups, including the new Pi upload flow. Hardware phones, real approval extensions, authenticated model tasks, and Pi reading a submitted image have **not** been exercised.
+
+The locked Nix package built on x86-64, and its installed launcher passed isolated upload/paste and all-four-backend launch tests with fake CLIs. The runtime tarball passed SHA-256 verification and the same smoke checks after extraction without `node_modules`. Package smoke checks omit PATH-based tmux fault injection because the Nix wrapper deliberately pins tmux; ordinary source tests retain those faults. During maintainer review, the ARM64 build and both installed/extracted-runtime smoke suites passed too, including additional checks that the packaged HTML and its assets are served. Hosted release publication remains unverified. No live service, private config, existing tmux session, or deployment host was changed, and no optional speech model was downloaded.
 
 ### Terminal and Observer Lifetimes
 

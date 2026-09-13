@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import type { Snapshot } from "../src/types";
 import { MODEL_PATH, RUNTIME_PATH } from "../src/speech-model";
 
-test("all three CLIs launch without an OpenCode API or database; static files stay confined", async () => {
+test("all four CLIs launch without an OpenCode API or database; static files stay confined", async () => {
   const dir = await mkdtemp(join(tmpdir(), "perch-backends-"));
   const socket = join(dir, "tmux.sock");
   const run = async (...args: string[]) => {
@@ -79,32 +79,39 @@ setInterval(() => {}, 1000);
     const port = probe.port!;
     await probe.stop(true);
     const origin = `http://127.0.0.1:${port}`;
-    server = Bun.spawn([process.execPath, "--no-env-file", "server/index.ts"], {
-      cwd: join(import.meta.dir, ".."),
-      env: {
-        PATH: `${join(dir, "bin")}:${process.env.PATH}`,
-        HOME: join(dir, "home"),
-        TERM: "xterm-256color",
-        PORT: String(port),
-        TMUX_SOCKET: socket,
-        PROJECTS_ROOT: join(dir, "home"),
-        STATE_DIR: join(dir, "state"),
-        DIST_DIR: join(dir, "dist"),
-        OPENCODE_URL: "http://127.0.0.1:1",
-        OPENCODE_DB_PATH: join(dir, "missing.db"),
-        OPENCODE_BIN: fixture,
-        CODEX_HOME: join(dir, "codex"),
-        DSH_HOME: join(dir, "dsh"),
-        CODEX_BIN: process.env.PERCH_TEST_CODEX_BIN || fixture,
-        DEEPSEEK_BIN: process.env.PERCH_TEST_DEEPSEEK_BIN || fixture,
-        // No credentials, user config, provider prompts, or billable turns in smoke tests.
-        OPENAI_API_KEY: "",
-        DEEPSEEK_API_KEY: "",
-        DSH_TELEMETRY_DISABLED: "1",
+    server = Bun.spawn(
+      process.env.PERCH_TEST_PACKAGE_BIN
+        ? [process.env.PERCH_TEST_PACKAGE_BIN]
+        : [process.execPath, "--no-env-file", "server/index.ts"],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          HOME: join(dir, "home"),
+          TERM: "xterm-256color",
+          PORT: String(port),
+          TMUX_SOCKET: socket,
+          PROJECTS_ROOT: join(dir, "home"),
+          STATE_DIR: join(dir, "state"),
+          DIST_DIR: join(dir, "dist"),
+          OPENCODE_URL: "http://127.0.0.1:1",
+          OPENCODE_DB_PATH: join(dir, "missing.db"),
+          OPENCODE_BIN: fixture,
+          PI_BIN: fixture,
+          PI_CODING_AGENT_DIR: join(dir, "home"),
+          CODEX_HOME: join(dir, "codex"),
+          DSH_HOME: join(dir, "dsh"),
+          CODEX_BIN: process.env.PERCH_TEST_CODEX_BIN || fixture,
+          DEEPSEEK_BIN: process.env.PERCH_TEST_DEEPSEEK_BIN || fixture,
+          // No credentials, user config, provider prompts, or billable turns in smoke tests.
+          OPENAI_API_KEY: "",
+          DEEPSEEK_API_KEY: "",
+          DSH_TELEMETRY_DISABLED: "1",
+        },
+        stdout: "ignore",
+        stderr: "pipe",
       },
-      stdout: "ignore",
-      stderr: "pipe",
-    });
+    );
     let snapshot: Snapshot | undefined;
     for (let i = 0; i < 80; i++) {
       try {
@@ -115,6 +122,7 @@ setInterval(() => {}, 1000);
       }
     }
     expect(snapshot?.backends.map((b) => b.available)).toEqual([
+      true,
       true,
       true,
       true,
@@ -270,7 +278,7 @@ setInterval(() => {}, 1000);
         await stat(join(dir, "home", "not-created")).catch(() => null),
       ).toBeNull();
     }
-    for (const backend of ["opencode", "codex", "deepseek"] as const) {
+    for (const backend of ["opencode", "codex", "pi", "deepseek"] as const) {
       const real =
         backend === "codex"
           ? process.env.PERCH_TEST_CODEX_BIN
@@ -292,7 +300,7 @@ setInterval(() => {}, 1000);
       expect(await run("show-environment", "-t", result.id, "HOME")).toBe(
         `HOME=${join(dir, "home")}`,
       );
-      if (backend !== "opencode") {
+      if (backend === "codex" || backend === "deepseek") {
         const variable = backend === "codex" ? "CODEX_HOME" : "DSH_HOME";
         expect(await run("show-environment", "-t", result.id, variable)).toBe(
           `${variable}=${join(dir, backend === "codex" ? "codex" : "dsh")}`,
@@ -348,18 +356,20 @@ setInterval(() => {}, 1000);
           JSON.stringify(
             backend === "opencode"
               ? [join(dir, "project with spaces"), `--prompt=${prompt}`]
-              : [
-                  "--config",
-                  "tui.notifications=true",
-                  "--config",
-                  'tui.notification_method="osc9"',
-                  "--config",
-                  'tui.notification_condition="always"',
-                  "--cd",
-                  join(dir, "project with spaces"),
-                  "--",
-                  prompt,
-                ],
+              : backend === "pi"
+                ? [prompt]
+                : [
+                    "--config",
+                    "tui.notifications=true",
+                    "--config",
+                    'tui.notification_method="osc9"',
+                    "--config",
+                    'tui.notification_condition="always"',
+                    "--cd",
+                    join(dir, "project with spaces"),
+                    "--",
+                    prompt,
+                  ],
           ),
         );
         expect(await Bun.file(join(dir, "injected")).exists()).toBe(false);
@@ -405,7 +415,9 @@ setInterval(() => {}, 1000);
         }
       }
     }
+    // The Nix wrapper pins tmux ahead of PATH; fault injection is source-only.
     if (
+      !process.env.PERCH_TEST_PACKAGE_BIN &&
       !process.env.PERCH_TEST_CODEX_BIN &&
       !process.env.PERCH_TEST_DEEPSEEK_BIN
     ) {
@@ -463,7 +475,9 @@ setInterval(() => {}, 1000);
         insert: [
           {
             id: "perch-events",
-            name: join(import.meta.dir, "../integrations/deepseek.mjs"),
+            name: process.env.PERCH_TEST_PACKAGE_BIN
+              ? expect.stringMatching(/\/integrations\/deepseek\.mjs$/)
+              : join(import.meta.dir, "../integrations/deepseek.mjs"),
           },
         ],
       },

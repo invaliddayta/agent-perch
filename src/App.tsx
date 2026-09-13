@@ -1,3 +1,4 @@
+import { piImageReference } from "./image-reference";
 import {
   useCallback,
   useEffect,
@@ -107,6 +108,12 @@ export function App() {
   ];
   const canDictate =
     connection === "connected" && pane?.command === "opencode" && !!visible;
+  const imageBackend =
+    pane?.backend === "pi" || pane?.command === "pi" ? "pi" : "opencode";
+  const canPasteImage =
+    connection === "connected" &&
+    !!visible &&
+    (canDictate || imageBackend === "pi");
   const unread = unreadEvents(snapshot?.sessions || [], seen);
   const unreadCount = new Set(unread.map(({ session }) => sessionKey(session)))
     .size;
@@ -274,15 +281,20 @@ export function App() {
     const dictation = typeof content === "string";
     try {
       if (busy) throw new Error("Another paste is in progress.");
-      target ??= canDictate
-        ? terminal.current?.capturePasteTarget()
+      target ??= (dictation ? canDictate : canPasteImage)
+        ? terminal.current?.capturePasteTarget(
+            dictation ? "opencode" : imageBackend,
+          )
         : undefined;
       if (!target)
         throw new Error(
-          "Open a connected OpenCode prompt before pasting images.",
+          "Open a connected OpenCode or Pi prompt before pasting images.",
         );
       transfer.current = true;
       setProgress(dictation ? "Pasting dictation..." : "Uploading image...");
+      await target.ready;
+      if (target.signal.aborted)
+        throw new Error("The terminal changed. Text was not pasted.");
       for (const item of dictation ? [content] : content) {
         let text: string;
         if (typeof item === "string") text = item;
@@ -301,13 +313,14 @@ export function App() {
           const result = await response.json();
           if (!response.ok)
             throw new Error(result.error || "Image upload failed.");
-          text = result.path;
+          text =
+            imageBackend === "pi" ? piImageReference(result.path) : result.path;
         }
         await target.paste(text);
       }
       if (!dictation)
         setNotice(
-          "Image path pasted. Review the attachment in OpenCode before submitting.",
+          "Image file reference pasted. Review before submitting; Pi must read the host file.",
         );
     } catch (error) {
       if (dictation)
@@ -754,8 +767,8 @@ export function App() {
           <p>
             Moonshine Medium transcribes English on this device using the CPU.
             About 304 MiB downloads from your host on first use; audio stays
-            here. Dictation and image paths paste into OpenCode without
-            submitting.
+            here. Dictation pastes into OpenCode; image references paste into
+            OpenCode or Pi without submitting.
           </p>
           <label className="field">
             <input
