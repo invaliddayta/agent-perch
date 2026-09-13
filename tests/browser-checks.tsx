@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { Terminal, type TerminalHandle } from "../src/Terminal";
 import { useSessions } from "../src/sessions";
 import type { Session, Snapshot } from "../src/types";
+import { piImageReference } from "../src/image-reference";
 import { App } from "../src/App";
 import { decodeRecording } from "../src/voice";
 import "../src/style.css";
@@ -179,11 +180,23 @@ export async function runBrowserChecks() {
       "Uncertain delivery must never be retried automatically",
     );
     checks.push("PASS guarded, acknowledged, non-submitting paste");
+    const piTarget = ref.current!.capturePasteTarget("pi");
+    const piDelivery = piTarget.paste(piImageReference('/state/a b/"$().png'));
+    const piPaste = ws.sent.filter((m) => m.type === "paste").at(-1)!;
+    assert(
+      piPaste.backend === "pi" &&
+        !piPaste.opencodeOnly &&
+        piPaste.submit === false &&
+        !/[\r\n]/.test(piPaste.data),
+      "Pi reference must remain literal, backend-bound and non-submitting",
+    );
+    ws.receive({ type: "input-ack", id: piPaste.id });
+    await piDelivery;
 
     ws.receive({ type: "pane", paneId: "%2", viewerId: "$20" });
     ws.receive({ type: "pane", paneId: "%1", viewerId: "$20" });
     assert(
-      target.signal.aborted,
+      target.signal.aborted && piTarget.signal.aborted,
       "Returning to the original pane must not revive a destination",
     );
     await rejects(() => target.paste("stale"), "terminal changed");
@@ -547,7 +560,7 @@ async function appChecks(root: Root, host: HTMLElement) {
       });
     });
   }) as typeof fetch;
-  const connect = async (id: number) => {
+  const connect = async (id: number, dictate = true) => {
     const ws = Socket.instances.at(-1)!;
     ws.receive({
       type: "ready",
@@ -557,7 +570,8 @@ async function appChecks(root: Root, host: HTMLElement) {
     await ws.bracketed(true);
     await wait(
       () =>
-        button("Dictate on device") && !button("Dictate on device").disabled,
+        button("Dictate on device") &&
+        button("Dictate on device").disabled !== dictate,
     );
     return ws;
   };
@@ -848,7 +862,36 @@ async function appChecks(root: Root, host: HTMLElement) {
         microphoneRequests === beforeMicrophone + 1,
       "Manual retry must recover without opening a microphone",
     );
+    flushSync(() => root.render(null));
+    list = [makeSession(1)];
+    list[0].panes[0].command = "pi";
+    list[0].panes[0].backend = "pi";
+    voiceReady = false;
+    uploads = [];
+    flushSync(() => root.render(<App />));
+    await wait(() => host.querySelector(".session-item"));
+    open("fixture-1");
+    ws = await connect(1, false);
+    host.querySelector(".workspace")!.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        clipboardData: clipboard,
+      }),
+    );
+    await wait(() => uploads.length === 1);
+    uploads[0].finish();
+    await wait(() => ws.sent.some((m) => m.type === "paste"));
+    const piPaste = ws.sent.find((m) => m.type === "paste")!;
+    assert(
+      piPaste.backend === "pi" &&
+        piPaste.data.includes(' "/fixture/image.png" ') &&
+        piPaste.submit === false,
+      "Pi upload must paste a quoted file reference without Enter",
+    );
+    ws.receive({ type: "input-ack", id: piPaste.id });
+    await wait(() => !host.querySelector(".progress"));
     return [
+      "PASS Pi image file reference upload and backend-bound non-submitting delivery",
       "PASS dictation, microphone cancellation, warm model reuse, and late transcripts",
       "PASS image upload cancellation, guarded delivery, and persistent dictation recovery",
       "PASS duplicate submission, busy dialog cancellation, creation, failed kill, and confirmed kill",
