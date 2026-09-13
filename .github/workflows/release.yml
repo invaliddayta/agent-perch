@@ -42,6 +42,7 @@ jobs:
           sha256sum --check SHA256SUMS
           tar -xzf agent-perch-*-runtime.tar.gz
           launcher=$(find "$RUNNER_TEMP/perch-release" -path '*/bin/agent-perch' -type f)
+          test -x "$launcher"
           cd "$GITHUB_WORKSPACE"
           PERCH_TEST_PACKAGE_BIN="$launcher" bun test --no-env-file tests/pi-terminal.test.ts tests/backend-integration.test.ts
       - uses: actions/upload-artifact@v4

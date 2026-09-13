@@ -89,6 +89,19 @@ test("Pi file reference paste uses a disposable native tmux viewer, rejects chan
       await Bun.sleep(50);
     }
     expect(ready).toBe(true);
+    if (process.env.PERCH_TEST_PACKAGE_BIN) {
+      const response = await fetch(origin + "/");
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/html");
+      const html = await response.text();
+      const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)];
+      expect(assets.length).toBeGreaterThan(0);
+      for (const [, path] of assets) {
+        const asset = await fetch(origin + path);
+        expect(asset.status).toBe(200);
+        expect((await asset.arrayBuffer()).byteLength).toBeGreaterThan(0);
+      }
+    }
     const upload = async (release = Promise.resolve()) => {
       const response = await fetch(origin + "/api/images", {
         method: "POST",

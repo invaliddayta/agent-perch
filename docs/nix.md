@@ -39,4 +39,4 @@ PERCH_TEST_PACKAGE_BIN="$PWD/result/bin/agent-perch" \
   bun test --no-env-file tests/pi-terminal.test.ts tests/backend-integration.test.ts
 ```
 
-The last test launches the installed wrapper with a fake Pi process, disposable tmux socket, temporary HOME/XDG state, and a random local port. It checks upload, external writable state, guarded paste, and no submission. It never uses a provider or touches existing sessions. Tag CI builds and runs this check on both Linux architectures; local results do not prove hosted CI or an untested architecture passed.
+The last test launches the installed wrapper with a fake Pi process, disposable tmux socket, temporary HOME/XDG state, and a random local port. It checks the packaged HTML and assets, upload, external writable state, guarded paste, and no submission. It never uses a provider or touches existing sessions. Tag CI builds and runs this check on both Linux architectures; local results do not prove hosted CI or an untested architecture passed.

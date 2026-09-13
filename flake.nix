@@ -32,7 +32,7 @@
             buildPhase = ''
               export HOME="$TMPDIR/home"
               mkdir -p "$HOME"
-              bun install --frozen-lockfile --ignore-scripts --no-cache --backend copy --os '*' --cpu '*'
+              bun install --frozen-lockfile --ignore-scripts --no-cache --backend copyfile --os '*' --cpu '*'
             '';
             installPhase = ''
               mv node_modules "$out"
