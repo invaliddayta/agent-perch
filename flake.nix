@@ -67,7 +67,7 @@
           };
         in { default = perch; agent-perch = perch; });
       apps = eachSystem (system: {
-        default = { type = "app"; program = "${self.packages.${system}.default}/bin/agent-perch"; };
+        default = { type = "app"; program = "${self.packages.${system}.default}/bin/agent-perch"; meta.description = "Run Agent Perch with external writable state"; };
       });
     };
 }

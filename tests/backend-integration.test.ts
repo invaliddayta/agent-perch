@@ -415,7 +415,9 @@ setInterval(() => {}, 1000);
         }
       }
     }
+    // The Nix wrapper pins tmux ahead of PATH; fault injection is source-only.
     if (
+      !process.env.PERCH_TEST_PACKAGE_BIN &&
       !process.env.PERCH_TEST_CODEX_BIN &&
       !process.env.PERCH_TEST_DEEPSEEK_BIN
     ) {
