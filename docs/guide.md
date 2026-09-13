@@ -88,7 +88,7 @@ Closing a tab or losing the network leaves the agent running. Reconnect creates 
 
 ### Agent Attention
 
-New sessions launched from Perch have native event observation. **Turn finished** means a successfully completed root turn was observed. **Needs attention** can mean a question, approval, or a Codex turn-completion notification; inspect the TUI before deciding what to do. **Agent error** is available when the backend emits the corresponding event. No event changes prompts, submits input, grants permissions, or resumes work automatically.
+New OpenCode/Codex/DSH sessions launched from Perch have native event observation. Pi observation is opt-in with `PI_ATTENTION=1` for Pi 0.85.1; see [Pi setup](backends.md#pi). **Turn finished** means a successfully completed root turn was observed. **Needs attention** can mean a question, approval, or a Codex turn-completion notification; inspect the TUI before deciding what to do. **Agent error** is available when the backend emits the corresponding event. No event changes prompts, submits input, grants permissions, or resumes work automatically.
 
 Unread events appear as a dot in the session list, an in-app banner, and a session count in the tab title and switcher button. **Open terminal** opens the relevant session/window; **Mark seen** acknowledges the displayed event. Switching sessions does not silently dismiss it. Acknowledgments persist locally and synchronize between tabs on the same browser origin, not between devices.
 

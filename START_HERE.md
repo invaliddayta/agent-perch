@@ -22,7 +22,7 @@ bun run start
 
 Open **http://localhost:4310/**. Existing tmux sessions appear automatically. To start an agent, choose **New session**, enter a directory, and pick a backend. A missing directory can be created; a blank name uses the directory name.
 
-This starts only Perch. All three agents run directly in tmux, without a separate API service. See [backend setup](docs/backends.md).
+This starts only Perch. All four agents run directly in tmux, without a separate API service. See [backend setup](docs/backends.md).
 
 ## Keep It Running
 
@@ -66,7 +66,7 @@ Dictation currently pastes text into OpenCode only. It does not press Enter. Rea
 - Tap a mobile terminal to bring up the keyboard. The touch strip supplies the keys phone keyboards forgot.
 - **Settings > Fit the terminal to this screen** controls whether this viewer can resize the terminal.
 - The **red X** beside a session opens a confirmation before killing its running work. Cancel leaves it alone.
-- New sessions report native turn-finished/attention events. Check the unread dots, banner, and tab count; **Mark seen** acknowledges them. **No status** means no native signal is available, not that the agent is idle. Read its TUI for approval and compaction controls.
+- New OpenCode/Codex/DSH sessions report native turn-finished/attention events; Pi reporting is opt-in with `PI_ATTENTION=1` ([setup](docs/backends.md#pi)). Check the unread dots, banner, and tab count; **Mark seen** acknowledges them. **No status** means no native signal is available, not that the agent is idle. Read its TUI for approval and compaction controls.
 - Clipboard writes may need a tap on **Copy to clipboard** if the browser blocks automatic copying.
 
 If something fails, [report a small, redacted reproduction](CONTRIBUTING.md). Please leave your API keys out of the screenshot.

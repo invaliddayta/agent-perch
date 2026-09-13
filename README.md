@@ -63,7 +63,7 @@ Session search, pins, physical keyboards, mobile touch keys, and supported clipb
 
 The **red X** beside each session opens a confirmation before killing it. Closing a browser tab still leaves the agent running; confirming **Kill session** does not.
 
-New sessions have **native attention indicators** that stay unread until **Mark seen**. OpenCode and DSH expose lifecycle events; Codex notifications produce generic **Needs attention** indicators. Observation does not require an open viewer. Existing uninstrumented agents are left alone. **No status** is not a claim that an agent is idle. [Details and limits](docs/guide.md#agent-attention).
+New OpenCode/Codex/DSH sessions, and Pi sessions with `PI_ATTENTION=1`, have **native attention indicators** that stay unread until **Mark seen**. OpenCode and DSH expose lifecycle events; Codex notifications produce generic **Needs attention** indicators. Observation does not require an open viewer. Existing uninstrumented agents are left alone. **No status** is not a claim that an agent is idle. [Details and limits](docs/guide.md#agent-attention).
 
 The compact, flat UI uses a locally served Proggy Clean font, with larger touch controls on phones. The terminal keeps its own readable, adjustable font. No web-font CDN.
 
