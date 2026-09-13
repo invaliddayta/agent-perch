@@ -7,7 +7,7 @@
 
 ## Deployment
 
-- The server binds to `127.0.0.1`. For remote access, use private HTTPS with access control, such as Tailscale Serve or an authenticated reverse proxy.
+- The server defaults to `HOST=127.0.0.1`, `PORT=4310`. Non-loopback `HOST` values require network isolation preventing authentication bypass. For remote access, use private HTTPS with access control, such as Tailscale Serve or an authenticated reverse proxy terminating TLS with plain internal HTTP and authenticated WebSocket upgrades.
 - Never use Tailscale Funnel or expose an unauthenticated proxy to the internet. Run as your normal user, not root.
 - Restrict the network/proxy policy to people and devices you trust with that account. A tailnet is not automatically a one-person network.
 - Host/Origin checks and mutation headers block cross-site requests. They do not authenticate users.

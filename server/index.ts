@@ -121,7 +121,7 @@ function closeTerminal(ws: Bun.ServerWebSocket<SocketData>) {
 }
 
 const server = Bun.serve<SocketData>({
-  hostname: "127.0.0.1",
+  hostname: config.host,
   port,
   maxRequestBodySize: MAX_IMAGE_BYTES + 1,
   idleTimeout: 30,

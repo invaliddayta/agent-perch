@@ -59,6 +59,7 @@ if (import.meta.main) {
       const config = readConfig();
       const values: Record<string, string> = {
         PUBLIC_ORIGIN: config.publicOrigin || "",
+        HOST: config.host,
         PORT: String(config.port),
         PROJECTS_ROOT: config.projectsRoot,
       };
