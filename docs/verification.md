@@ -2,7 +2,7 @@
 
 [Overview](../README.md) / [Manual](guide.md) / **Verification** / [Release checklist](release.md)
 
-**Fork checks: 2026-09-13.** The table and fork section below describe local results; the deployment and speech measurements are retained upstream observations from 2026-09-09, not deployments or model runs performed for this fork.
+**Baseline checks: 2026-09-13; mobile clipboard follow-up: 2026-09-14.** The table and validation sections describe local results. The older deployment and speech measurements are retained observations from 2026-09-09, not results from the clipboard follow-up.
 
 > [!NOTE]
 > Local tests are evidence, not a hosted CI badge or a security audit. Hardware microphones, physical phones, and authenticated model tasks are separate checks.
@@ -15,7 +15,7 @@
 | Bun suite | **91 pass / 1066 assertions**, 1 optional skip | 21 files; isolated sockets and inert agents |
 | Dependency audit | No vulnerabilities reported | Current lockfile, not a supply-chain guarantee |
 | Privacy checks | Gitleaks 8.30.1: no credential matches | Physical checkout, history, and decoded Git objects; device references and screenshots reviewed separately |
-| Browser regressions | **13 groups pass** | Real React/xterm; mocked transports, capture, inference |
+| Browser regressions | **17 groups pass** (2026-09-14 follow-up) | Real React/xterm; mocked transports, capture, inference and clipboard failures |
 | Real English inference | Pass | Public audio fixtures, no hardware microphone |
 | Hosted GitHub Actions | PR Bun and Nix checks pass | Tag-triggered release workflow has not run |
 | Nix package | Pass, Linux x86-64 and ARM64 | Contributor validated x86-64; maintainer built and smoke-tested ARM64 during PR review |
@@ -38,6 +38,15 @@ The locked Nix package built on x86-64, and its installed launcher passed isolat
 ### Browser and Cache Behavior
 
 The browser suite covers session snapshot races, attachment invalidation, dialogs, image/dictation delivery, microphone release, native audio decoding at 8/16/44.1/48 kHz, startup preference persistence, opt-out, and failed-load recovery. It runs separately at `/tests/browser.html` on Vite; it is not yet part of hosted CI.
+
+**Mobile clipboard, 2026-09-14:** all 17 browser groups passed on desktop Chromium and at 390x844 and 320x568 touch-emulated viewports. TypeScript, the production build, and the Bun suite (91 pass, 1 optional skip) also passed.
+
+- Snapshot checks cover visible/scrolled and alternate-screen text, soft wraps, Unicode, frozen selection, and unchanged desktop selection and touch scrolling.
+- Paste checks cover clipboard refusal/manual fallback, late reads and edits, destination changes, duplicate submission, failed-delivery recovery, modifier isolation, framing, and size/control-character limits.
+- Separate trusted touch events exercised all four arrows and the real browser clipboard with inert fixtures. Copy retained its selected range. Paste sent nothing before confirmation and then sent one bracketed paste without Enter. All toolbar controls remained visible without horizontal scrolling.
+- A user confirmed the mobile copy flow and revised controls. Browser/OS details were not recorded; this is not cross-device coverage. Native phone Paste menus remain a hardware check.
+
+The README's terminal screenshots were refreshed from the production build using inert fixtures, not live sessions or conversations.
 
 The offline-shell fetch handler has been removed. A compatibility worker retires only `agent-watch-shell-*` caches. Both the script regression and an actual Chromium registration/activation test confirm that speech and unrelated caches survive. Browser-menu installation remains the intended route; physical installation and suspend/resume are not verified.
 

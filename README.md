@@ -61,6 +61,8 @@ For another device, follow the [private HTTPS setup](docs/guide.md#private-remot
 
 Session search, pins, physical keyboards, mobile touch keys, and supported clipboard text writes work across the terminal layer. **Ctrl+Alt+S** opens the switcher. Your agent's approval controls stay in its own TUI; Perch doesn't turn them off.
 
+On phones, **copy and paste icons** sit beside the microphone, with arrows and Enter on their own row on narrow screens. Copy opens a selectable snapshot of the visible terminal. Paste opens an editable clipboard preview and waits for confirmation without pressing Enter. Native Copy/Paste menus remain available if the browser blocks clipboard access. [Clipboard controls](docs/guide.md#clipboard-text).
+
 The **red X** beside each session opens a confirmation before killing it. Closing a browser tab still leaves the agent running; confirming **Kill session** does not.
 
 New OpenCode/Codex/DSH sessions, and Pi sessions with `PI_ATTENTION=1`, have **native attention indicators** that stay unread until **Mark seen**. OpenCode and DSH expose lifecycle events; Codex notifications produce generic **Needs attention** indicators. Observation does not require an open viewer. Existing uninstrumented agents are left alone. **No status** is not a claim that an agent is idle. [Details and limits](docs/guide.md#agent-attention).
@@ -75,7 +77,7 @@ The compact, flat UI uses a locally served Proggy Clean font, with larger touch 
 These captures use the current UI with isolated, inert fixtures. No provider calls or real conversations.
 
 <img src="docs/desktop.png" alt="The desktop terminal" width="900">
-<img src="docs/mobile.png" alt="The mobile terminal and touch-key strip" width="300">
+<img src="docs/mobile.png" alt="The mobile terminal with compact clipboard icons and a fully visible navigation-key row" width="300">
 
 </details>
 
@@ -122,7 +124,7 @@ tmux owns the sessions. Perch launches a CLI and forwards terminal input/output;
 | --- | --- |
 | The UI, dialogs, or colors | [`src/App.tsx`](src/App.tsx), [`src/style.css`](src/style.css) |
 | Session refreshes and mutations | [`src/sessions.ts`](src/sessions.ts) |
-| Terminal rendering and keys | [`src/Terminal.tsx`](src/Terminal.tsx) |
+| Terminal rendering, selection, and text paste | [`src/Terminal.tsx`](src/Terminal.tsx) |
 | Routes, PTYs, and session creation | [`server/index.ts`](server/index.ts) |
 | Agent commands and recognition | [`server/backends.ts`](server/backends.ts) |
 | Native status and attention | [`server/agent-status.ts`](server/agent-status.ts), [`integrations/`](integrations/) |

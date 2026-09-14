@@ -108,6 +108,26 @@ Use Perch's button rather than the browser's native F11/menu fullscreen: web cod
 
 ### Clipboard Text
 
+Copy and paste icons sit beside the microphone. On narrow screens, arrows and Enter have their own row so clipboard controls do not hide them. Desktop terminal selection and ordinary keyboard paste are unchanged.
+
+**Copy on a phone or tablet:**
+
+1. Scroll to the desired text in tmux.
+2. Tap the **copy icon** (**Select terminal text**) to open a frozen, selectable view.
+3. Long-press and adjust the selection handles, then use **Copy selection** or the browser's **Copy** menu.
+
+**Copy all** copies the visible-screen snapshot, not the entire tmux history. Close the dialog to keep scrolling. The terminal keeps running, and selection does not send keystrokes to it.
+
+**Paste text:**
+
+1. Tap the **paste icon** (**Paste text**) to read the clipboard into an editable review field.
+2. Review or edit the text. If clipboard access is blocked, long-press the field and choose the browser's **Paste** option instead.
+3. Tap **Paste into terminal** to insert it into the originally selected pane, without pressing Enter.
+
+This text flow works across backends; image paste is separate. Multiline text and tabs require the prompt's bracketed-paste mode: exit tmux copy mode and return to a prompt if asked. Plain single-line text also works without that mode. Unsupported terminal control characters are rejected; each paste is limited to 64,000 characters including terminal framing.
+
+Clipboard buttons require HTTPS or localhost and browser permission. Native Copy/Paste menus are the fallback. Clipboard reads happen only on a paste-button tap; snapshots and drafts are kept in browser memory, not persisted. Switching panes or reconnecting invalidates a paste destination. Late reads never overwrite manual edits or paste after dismissal, and failed delivery retains the draft without automatically retrying.
+
 TUIs emitting supported OSC 52 writes can copy to the viewing device. A focused page with recent input attempts this automatically; if refused, tap **Copy to clipboard**. Ordinary paste stays terminal input.
 
 The passive tmux control client does not change global clipboard settings or replace `pipe-pane` hooks. It follows native pane/window notifications, not a one-second pane poll. Only the displayed pane forwards text; writes are limited to 128 KiB and clipboard-read requests are ignored. Rapid pane/window round trips invalidate old delivery targets. Losing this observer disconnects the viewer so it can reconnect with fresh metadata; it does not kill the agent.

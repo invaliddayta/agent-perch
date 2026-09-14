@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ClipboardPaste,
   Copy,
   CornerDownLeft,
   LoaderCircle,
@@ -56,7 +57,13 @@ export function App() {
   const [error, setError] = useState("");
   const { snapshot, offline, create, kill } = useSessions(setError);
   const [notice, setNotice] = useState("");
-  const [modal, setModal] = useState<"sessions" | "new" | "settings">();
+  const [modal, setModal] = useState<
+    | "sessions"
+    | "new"
+    | "settings"
+    | "copy"
+    | { target: PasteTarget; clipboard: Promise<string> }
+  >();
   const [killTarget, setKillTarget] = useState<Session>();
   const [seen, setSeen] = useState(storedSeen);
   const [fontSize, setFontSize] = useState(13);
@@ -187,7 +194,8 @@ export function App() {
       event.isComposing ||
       event.getModifierState("AltGraph") ||
       modal === "new" ||
-      modal === "settings"
+      modal === "settings" ||
+      typeof modal === "object"
     )
       return;
     if (
@@ -551,14 +559,14 @@ export function App() {
                   .catch(() => {});
             }}
           />
-          <div className="terminal-controls">
-            <div
-              className="keybar"
-              aria-label="Special terminal keys"
-              onPointerDown={(e) => {
-                if ((e.target as Element).closest("button")) e.preventDefault();
-              }}
-            >
+          <div
+            className="terminal-controls"
+            onPointerDown={(event) => {
+              if ((event.target as Element).closest("button"))
+                event.preventDefault();
+            }}
+          >
+            <div className="keybar" aria-label="Special terminal keys">
               {(["ctrl", "alt"] as const).map((key) => (
                 <button
                   key={key}
@@ -579,6 +587,11 @@ export function App() {
                 Esc
               </button>
               <button onClick={() => special("\t")}>Tab</button>
+            </div>
+            <div
+              className="navigation-keys"
+              aria-label="Terminal navigation keys"
+            >
               {(
                 [
                   ["left", "D", ArrowLeft],
@@ -599,36 +612,69 @@ export function App() {
                 <CornerDownLeft size={17} />
               </button>
             </div>
-            <button
-              className={voiceState.phase === "recording" ? "recording" : ""}
-              aria-label={
-                voiceState.phase === "recording"
-                  ? "Stop recording"
-                  : "Dictate on device"
-              }
-              title="Dictate into OpenCode"
-              disabled={
-                voiceState.phase !== "recording" &&
-                (voiceState.phase === "transcribing" ||
-                  !!progress ||
-                  !snapshot?.voiceReady ||
-                  !canDictate)
-              }
-              onClick={() => void microphone()}
-            >
-              {voiceState.phase === "recording" ? (
-                <Square size={17} />
-              ) : (
-                <Mic size={17} />
-              )}
-            </button>
-            {["loading", "recording", "transcribing"].includes(
-              voiceState.phase,
-            ) && (
-              <button aria-label="Cancel dictation" onClick={cancelVoice}>
-                <X size={16} />
+            <div className="terminal-actions">
+              <button
+                aria-label="Select terminal text"
+                title="Select terminal text to copy"
+                onClick={() => setModal("copy")}
+              >
+                <Copy size={17} />
               </button>
-            )}
+              <button
+                aria-label="Paste text"
+                title="Paste text into terminal"
+                disabled={connection !== "connected" || !visible}
+                onClick={() => {
+                  try {
+                    const target =
+                      terminal.current!.capturePasteTarget("terminal");
+                    let clipboard: Promise<string>;
+                    // Read during the tap; Safari requires user activation.
+                    try {
+                      clipboard = navigator.clipboard.readText();
+                    } catch (error) {
+                      clipboard = Promise.reject(error);
+                    }
+                    void clipboard.catch(() => {});
+                    setModal({ target, clipboard });
+                  } catch (error) {
+                    setError(errorText(error));
+                  }
+                }}
+              >
+                <ClipboardPaste size={17} />
+              </button>
+              <button
+                className={voiceState.phase === "recording" ? "recording" : ""}
+                aria-label={
+                  voiceState.phase === "recording"
+                    ? "Stop recording"
+                    : "Dictate on device"
+                }
+                title="Dictate into OpenCode"
+                disabled={
+                  voiceState.phase !== "recording" &&
+                  (voiceState.phase === "transcribing" ||
+                    !!progress ||
+                    !snapshot?.voiceReady ||
+                    !canDictate)
+                }
+                onClick={() => void microphone()}
+              >
+                {voiceState.phase === "recording" ? (
+                  <Square size={17} />
+                ) : (
+                  <Mic size={17} />
+                )}
+              </button>
+              {["loading", "recording", "transcribing"].includes(
+                voiceState.phase,
+              ) && (
+                <button aria-label="Cancel dictation" onClick={cancelVoice}>
+                  <X size={16} />
+                </button>
+              )}
+            </div>
           </div>
           {(progress ||
             ["loading", "recording", "transcribing", "error"].includes(
@@ -695,6 +741,19 @@ export function App() {
           defaultDirectory={snapshot?.projectsRoot || "~"}
           onClose={() => setModal(undefined)}
           onCreate={async (body) => select(await create(body))}
+        />
+      )}
+      {modal === "copy" && (
+        <CopyTerminalText
+          getText={() => terminal.current?.visibleText() || ""}
+          onClose={() => setModal(undefined)}
+        />
+      )}
+      {typeof modal === "object" && (
+        <PasteTerminalText
+          target={modal.target}
+          clipboard={modal.clipboard}
+          onClose={() => setModal(undefined)}
         />
       )}
       {killTarget && (
@@ -1077,6 +1136,161 @@ function Modal({
         {children}
       </div>
     </dialog>
+  );
+}
+
+function CopyTerminalText({
+  getText,
+  onClose,
+}: {
+  getText(): string;
+  onClose(): void;
+}) {
+  // A stable native text field gives phones selection handles without TUI input.
+  const [text] = useState(getText);
+  const [selection, setSelection] = useState("");
+  const [status, setStatus] = useState("");
+  const helpId = useId();
+  async function copy(value: string) {
+    setStatus("");
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus("Copied to clipboard.");
+    } catch {
+      setStatus(
+        "Clipboard access was blocked or unavailable. Long-press the text and use the browser's Copy menu.",
+      );
+    }
+  }
+  return (
+    <Modal title="Select terminal text" onClose={onClose}>
+      <p id={helpId}>
+        Snapshot of the visible terminal. Long-press or drag to select text,
+        then copy. Close this view to scroll further in tmux.
+      </p>
+      <label className="field">
+        Terminal text
+        <textarea
+          className="copy-text"
+          aria-describedby={helpId}
+          readOnly
+          value={text}
+          placeholder="No visible terminal text."
+          spellCheck={false}
+          onSelect={(event) => {
+            const field = event.currentTarget;
+            setSelection(
+              field.value.slice(field.selectionStart, field.selectionEnd),
+            );
+          }}
+        />
+      </label>
+      <div className="button-row">
+        <button
+          disabled={!selection}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => void copy(selection)}
+        >
+          <Copy size={16} /> Copy selection
+        </button>
+        <button disabled={!text} onClick={() => void copy(text)}>
+          Copy all
+        </button>
+      </div>
+      <p role="status">{status}</p>
+    </Modal>
+  );
+}
+
+function PasteTerminalText({
+  target,
+  clipboard,
+  onClose,
+}: {
+  target: PasteTarget;
+  clipboard: Promise<string>;
+  onClose(): void;
+}) {
+  const [text, setText] = useState("");
+  const [reading, setReading] = useState(true);
+  const [clipboardError, setClipboardError] = useState("");
+  const [stale, setStale] = useState(target.signal.aborted);
+  const edited = useRef(false);
+  const { busy, error, close, submit } = useSubmission(onClose);
+  const helpId = useId();
+  useEffect(() => {
+    let live = true;
+    const abort = () => setStale(true);
+    target.signal.addEventListener("abort", abort, { once: true });
+    if (target.signal.aborted) abort();
+    void clipboard.then(
+      (value) => {
+        if (!live) return;
+        if (!edited.current) setText(value);
+        setReading(false);
+      },
+      () => {
+        if (!live) return;
+        setClipboardError(
+          "Clipboard access was blocked or unavailable. Long-press the field and choose Paste.",
+        );
+        setReading(false);
+      },
+    );
+    return () => {
+      live = false;
+      target.signal.removeEventListener("abort", abort);
+    };
+  }, [target, clipboard]);
+  return (
+    <Modal title="Paste text" onClose={close}>
+      <p id={helpId}>
+        Review the text before pasting into the terminal. Enter is not sent. You
+        can also long-press the field and choose Paste.
+      </p>
+      {reading && <p role="status">Reading clipboard...</p>}
+      {clipboardError && <p role="status">{clipboardError}</p>}
+      <label className="field">
+        Text to paste
+        <textarea
+          className="paste-text"
+          aria-describedby={helpId}
+          value={text}
+          readOnly={busy}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          onChange={(event) => {
+            edited.current = true;
+            setText(event.currentTarget.value);
+          }}
+        />
+      </label>
+      {(stale || error) && (
+        <p className="form-error" role="alert">
+          {stale
+            ? "The terminal changed. Close this dialog and reopen Paste in the intended pane."
+            : error}
+        </p>
+      )}
+      <div className="button-row">
+        <button
+          disabled={busy || stale || !text}
+          onClick={() =>
+            void submit(async () => {
+              await target.paste(text);
+              onClose();
+            }, "Inspect the terminal before retrying.")
+          }
+        >
+          <ClipboardPaste size={16} />{" "}
+          {busy ? "Pasting..." : "Paste into terminal"}
+        </button>
+        <button disabled={busy} onClick={close}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
   );
 }
 

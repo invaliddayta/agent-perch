@@ -67,6 +67,6 @@ Dictation currently pastes text into OpenCode only. It does not press Enter. Rea
 - **Settings > Fit the terminal to this screen** controls whether this viewer can resize the terminal.
 - The **red X** beside a session opens a confirmation before killing its running work. Cancel leaves it alone.
 - New OpenCode/Codex/DSH sessions report native turn-finished/attention events; Pi reporting is opt-in with `PI_ATTENTION=1` ([setup](docs/backends.md#pi)). Check the unread dots, banner, and tab count; **Mark seen** acknowledges them. **No status** means no native signal is available, not that the agent is idle. Read its TUI for approval and compaction controls.
-- Clipboard writes may need a tap on **Copy to clipboard** if the browser blocks automatic copying.
+- On mobile, the **copy icon** opens selectable terminal text. The **paste icon** opens a clipboard review field with native Paste as a fallback; **Paste into terminal** inserts text without Enter. Arrows remain visible on their own row on narrow screens. Clipboard writes from the TUI may need a tap on **Copy to clipboard** if the browser blocks automatic copying.
 
 If something fails, [report a small, redacted reproduction](CONTRIBUTING.md). Please leave your API keys out of the screenshot.

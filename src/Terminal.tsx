@@ -18,10 +18,11 @@ export type PasteTarget = {
 };
 export type TerminalHandle = {
   key(data: string): boolean;
-  capturePasteTarget(backend?: "opencode" | "pi"): PasteTarget;
+  capturePasteTarget(backend?: "opencode" | "pi" | "terminal"): PasteTarget;
   cancelPaste(): void;
   focus(): void;
   copy(): Promise<void>;
+  visibleText(): string;
   search(text: string): void;
   bottom(): void;
 };
@@ -101,7 +102,7 @@ export function Terminal(props: {
         !paneId ||
         ws?.readyState !== WebSocket.OPEN
       )
-        throw new Error("Open a connected supported prompt before pasting.");
+        throw new Error("Open a connected terminal before pasting.");
       const { signal } = (pasteLifetime.current ??= new AbortController());
       const targetId = backend === "pi" ? crypto.randomUUID() : undefined;
       const captured = targetId
@@ -147,26 +148,42 @@ export function Terminal(props: {
         ready: captured,
         async paste(text) {
           if (backend === "pi") await captured;
+          const terminal = term.current;
           if (
+            !terminal ||
             signal.aborted ||
             socket.current !== ws ||
             visiblePane.current !== paneId ||
             ws.readyState !== WebSocket.OPEN
           )
             throw new Error("The terminal changed. Text was not pasted.");
-          if (!term.current?.modes.bracketedPasteMode)
+          if (
+            backend === "terminal" &&
+            /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(text)
+          )
             throw new Error(
-              "The pane is not accepting bracketed paste. Review the agent prompt before trying again.",
+              "Text contains unsupported terminal control characters.",
+            );
+          if (
+            !terminal.modes.bracketedPasteMode &&
+            (backend !== "terminal" || /[\r\n\t]/.test(text))
+          )
+            throw new Error(
+              "The pane is not accepting bracketed paste. Exit tmux copy mode and return to a prompt before trying again.",
             );
           pasteCapture.current = "";
           let data: string;
           try {
-            term.current.paste(text);
+            terminal.paste(text);
             data = pasteCapture.current;
           } finally {
             pasteCapture.current = null;
           }
           if (!data) throw new Error("No text was pasted.");
+          if (data.length > 64000)
+            throw new Error(
+              "Paste is too large. Send less than 64,000 characters at a time.",
+            );
           const id = crypto.randomUUID();
           return new Promise<void>((resolve, reject) => {
             const abort = () =>
@@ -186,7 +203,7 @@ export function Terminal(props: {
               );
             }, 10000);
             pending.current.set(id, finish);
-            if (backend === "pi")
+            if (backend !== "opencode")
               signal.addEventListener("abort", abort, { once: true });
             ws.send(
               JSON.stringify({
@@ -196,7 +213,7 @@ export function Terminal(props: {
                 id,
                 paneId,
                 opencodeOnly: backend === "opencode",
-                backend,
+                backend: backend === "terminal" ? undefined : backend,
                 targetId,
               }),
             );
@@ -208,6 +225,22 @@ export function Terminal(props: {
     copy: async () => {
       const text = term.current?.getSelection();
       if (text) await navigator.clipboard.writeText(text);
+    },
+    visibleText: () => {
+      const terminal = term.current;
+      if (!terminal) return "";
+      const buffer = terminal.buffer.active;
+      const end = Math.min(buffer.length, buffer.viewportY + terminal.rows);
+      let text = "";
+      // Read the displayed buffer, including tmux's alternate-screen copy mode,
+      // without changing xterm's selection or asking the host for hidden history.
+      for (let row = buffer.viewportY; row < end; row++) {
+        const line = buffer.getLine(row)!;
+        if (row > buffer.viewportY && !line.isWrapped) text += "\n";
+        const continued = row + 1 < end && buffer.getLine(row + 1)!.isWrapped;
+        text += line.translateToString(!continued, 0, terminal.cols);
+      }
+      return text.replace(/\n+$/, "");
     },
     search: (text) => {
       if (text) search.current?.findNext(text);

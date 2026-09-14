@@ -65,19 +65,35 @@ class Socket {
     });
     await wait(() => this.sent.some((m) => m.type === "response"));
   }
+  async output(data: string) {
+    const responses = this.sent.filter((m) => m.type === "response").length;
+    this.receive({ type: "output", data: `${data}\x1b[5n` });
+    await wait(
+      () => this.sent.filter((m) => m.type === "response").length > responses,
+    );
+  }
 }
 
 export async function runBrowserChecks() {
   const originalSocket = window.WebSocket;
   const originalFetch = window.fetch;
+  const originalClipboard = Object.getOwnPropertyDescriptor(
+    navigator,
+    "clipboard",
+  );
   const host = document.createElement("div");
-  host.style.cssText = "width:600px;height:400px";
+  host.style.cssText = "width:600px;max-width:100%;height:400px";
   document.body.append(host);
   const root = createRoot(host);
   const checks: string[] = [];
   const ref = createRef<TerminalHandle>();
   const noop = () => {};
-  const renderTerminal = (control = true, fontSize = 13, windowId?: string) => {
+  const renderTerminal = (
+    control = true,
+    fontSize = 13,
+    windowId?: string,
+    modifiers = { ctrl: false, alt: false },
+  ) => {
     flushSync(() =>
       root.render(
         <Terminal
@@ -88,7 +104,7 @@ export async function runBrowserChecks() {
           control={control}
           fitScreen
           fontSize={fontSize}
-          modifiers={{ ctrl: false, alt: false }}
+          modifiers={modifiers}
           onModifierUsed={noop}
           onState={noop}
           onPane={noop}
@@ -301,10 +317,146 @@ export async function runBrowserChecks() {
       "PASS font resize, disconnect, reattach, and uncertain delivery cleanup",
     );
 
+    ws = renderTerminal();
+    ws.receive({ type: "ready", paneId: "%1", viewerId: "$22" });
+    await ws.output("\x1bc");
+    const { cols, rows } = ws.sent.filter((m) => m.type === "resize").at(-1)!;
+    const wrapped = "x".repeat(cols - 1) + " wrapped \u4e2d e\u0301";
+    await ws.output(`\x1b[31m${wrapped}\x1b[0m\r\n  indent\r\n\r\nlast`);
+    assert(
+      ref.current!.visibleText() === `${wrapped}\n  indent\n\nlast`,
+      "Visible text must preserve soft-wrap spaces, Unicode, indentation and blank lines without ANSI codes",
+    );
+    const copies: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text: string) => copies.push(text) },
+    });
+    const history = Array.from({ length: rows + 15 }, (_, i) => `history-${i}`);
+    await ws.output(`\x1bc${history.join("\r\n")}`);
+    const bottom = ref.current!.visibleText();
+    assert(
+      bottom === history.slice(-rows).join("\n"),
+      "Snapshots must include only the visible rows, not hidden scrollback",
+    );
+    ref.current!.search("history-2");
+    const scrolled = ref.current!.visibleText();
+    assert(
+      scrolled.includes("history-2\n") && !scrolled.includes(history.at(-1)!),
+      "Snapshots must follow the scrolled viewport, not the live buffer bottom",
+    );
+    await ref.current!.copy();
+    assert(
+      copies[0] === "history-2" && ref.current!.visibleText() === scrolled,
+      "Reading visible text must preserve desktop selection and scrolling",
+    );
+    ref.current!.bottom();
+    const element = host.querySelector<HTMLElement>(".xterm")!;
+    const screen = element
+      .querySelector(".xterm-screen")!
+      .getBoundingClientRect();
+    const touch = (type: string, y: number) =>
+      element.dispatchEvent(
+        Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+          touches:
+            type === "touchend"
+              ? []
+              : [{ identifier: 1, clientX: screen.x + 20, clientY: y }],
+        }),
+      );
+    touch("touchstart", screen.y + 5);
+    touch("touchmove", screen.y + 55);
+    touch("touchend", screen.y + 55);
+    assert(
+      ref.current!.visibleText() !== bottom &&
+        !ws.sent.some((m) => m.type === "input" || m.type === "paste"),
+      "Touch scrolling must still scroll local history without terminal input",
+    );
+    await ws.output(
+      "\x1b[?1049h\x1b[?1002h\x1b[?1006h\x1b[Htmux copy-mode text",
+    );
+    assert(
+      ref.current!.visibleText() === "tmux copy-mode text",
+      "The active alternate screen must not expose the hidden normal buffer",
+    );
+    touch("touchstart", screen.y + 55);
+    touch("touchmove", screen.y + 5);
+    touch("touchend", screen.y + 5);
+    assert(
+      ws.sent.some((m) => m.type === "input" && m.data.startsWith("\x1b[<")),
+      "Touch scrolling must still forward TUI mouse wheels in tmux",
+    );
+    flushSync(() => root.render(null));
+    checks.push(
+      "PASS visible text snapshots, soft wraps, scrolled history, desktop selection and tmux touch scrolling",
+    );
+
+    ws = renderTerminal(true, 13, undefined, { ctrl: true, alt: true });
+    ws.receive({ type: "ready", paneId: "%1", viewerId: "$23" });
+    const plainTarget = ref.current!.capturePasteTarget("terminal");
+    await ws.bracketed(false);
+    for (const text of ["first\nsecond", "first\rsecond", "first\tsecond"])
+      await rejects(() => plainTarget.paste(text), "bracketed paste");
+    const plainDelivery = plainTarget.paste("literal text");
+    const plainMessage = ws.sent.find((m) => m.type === "paste")!;
+    assert(
+      plainMessage?.data === "literal text" &&
+        plainMessage.paneId === "%1" &&
+        plainMessage.submit === false &&
+        !plainMessage.opencodeOnly &&
+        plainMessage.backend === undefined,
+      "Plain single-line paste must work outside OpenCode without modifier transforms or Enter",
+    );
+    ws.receive({ type: "input-ack", id: plainMessage.id });
+    await plainDelivery;
+    await ws.bracketed(true);
+    await rejects(
+      () => plainTarget.paste("\x1b[201~\runsafe"),
+      "control characters",
+    );
+    await rejects(() => plainTarget.paste("x".repeat(64000)), "too large");
+    assert(
+      !ws.sent.some((m) => m.type === "paste" || m.type === "input"),
+      "Unsafe or oversized clipboard text must not send data or disconnect the terminal",
+    );
+    const multiDelivery = plainTarget.paste("first\nsecond\tlast");
+    const multiMessage = ws.sent.find((m) => m.type === "paste")!;
+    assert(
+      multiMessage.data === "\x1b[200~first\rsecond\tlast\x1b[201~" &&
+        multiMessage.submit === false,
+      "Multiline clipboard text must use xterm's bracketed framing without submission",
+    );
+    const lostDelivery = rejects(
+      () => multiDelivery,
+      "before delivery was confirmed",
+    );
+    ws.receive({ type: "pane", paneId: "%2" });
+    ws.receive({ type: "pane", paneId: "%1" });
+    await lostDelivery;
+    ws.receive({ type: "input-ack", id: multiMessage.id });
+    await rejects(
+      () => plainTarget.paste("stale clipboard"),
+      "terminal changed",
+    );
+    const disconnectTarget = ref.current!.capturePasteTarget("terminal");
+    ws.close();
+    await rejects(
+      () => disconnectTarget.paste("disconnected clipboard"),
+      "terminal changed",
+    );
+    flushSync(() => root.render(null));
+    checks.push(
+      "PASS generic text paste, modifier isolation, safe framing, size limits and stale destinations",
+    );
+
     ws = renderTerminal(false);
     ws.receive({ type: "ready", paneId: "%1", viewerId: "$22" });
     assert(!ref.current!.key("x"), "Read-only attachment must reject input");
     await rejects(() => ref.current!.capturePasteTarget(), "connected");
+    await rejects(
+      () => ref.current!.capturePasteTarget("terminal"),
+      "connected",
+    );
     await ws.bracketed(true);
     assert(
       ws.sent.some((m) => m.type === "response"),
@@ -447,6 +599,9 @@ export async function runBrowserChecks() {
     host.remove();
     window.WebSocket = originalSocket;
     window.fetch = originalFetch;
+    if (originalClipboard)
+      Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
   }
 }
 
@@ -455,6 +610,10 @@ async function appChecks(root: Root, host: HTMLElement) {
     (key) => [key, Object.getOwnPropertyDescriptor(window, key)] as const,
   );
   const devices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+  const originalClipboard = Object.getOwnPropertyDescriptor(
+    navigator,
+    "clipboard",
+  );
   const savedSpeechPreference = localStorage.getItem("perch-auto-speech");
   const workers: SpeechWorker[] = [];
   let stops = 0;
@@ -659,6 +818,308 @@ async function appChecks(root: Root, host: HTMLElement) {
       !button("Dictate on device").disabled,
       "Reselecting the current session must preserve its live pane",
     );
+    assert(
+      !button("Select terminal text").textContent?.trim() &&
+        !button("Paste text").textContent?.trim(),
+      "Copy and paste controls must stay compact, labeled icons",
+    );
+    if (innerWidth <= 700 || matchMedia("(pointer: coarse)").matches) {
+      const controls = host.querySelector<HTMLElement>(".terminal-controls")!;
+      const bounds = controls.getBoundingClientRect();
+      assert(
+        controls.scrollWidth <= controls.clientWidth,
+        "Mobile terminal controls must not overflow horizontally",
+      );
+      for (const label of [
+        "Ctrl",
+        "Alt",
+        "Esc",
+        "Tab",
+        "Arrow left",
+        "Arrow up",
+        "Arrow down",
+        "Arrow right",
+        "Enter",
+        "Select terminal text",
+        "Paste text",
+      ]) {
+        const box = button(label).getBoundingClientRect();
+        assert(
+          box.width >= 40 &&
+            box.height >= 44 &&
+            box.left >= bounds.left &&
+            box.right <= bounds.right + 1 &&
+            box.top >= bounds.top &&
+            box.bottom <= bounds.bottom + 1,
+          `Mobile control must be visible without horizontal scrolling: ${label}`,
+        );
+      }
+    }
+    const copies: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text: string) => copies.push(text) },
+    });
+    await ws.output(
+      "\x1b[?1049h\x1b[?1002h\x1b[?1006h\x1b[Hbefore\r\n  mobile selection fixture",
+    );
+    const attachments = Socket.instances.length;
+    click("Select terminal text");
+    const field = host.querySelector<HTMLTextAreaElement>(".copy-text")!;
+    const frozen = field.value;
+    assert(
+      field.readOnly &&
+        !field.closest(".workspace") &&
+        getComputedStyle(field).userSelect === "text" &&
+        frozen === "before\n  mobile selection fixture" &&
+        button("Copy selection").disabled,
+      "Phones need a native selectable, read-only field outside terminal input handling",
+    );
+    field.focus();
+    const start = frozen.indexOf("mobile selection");
+    field.setSelectionRange(start, start + "mobile selection".length);
+    document.dispatchEvent(new Event("selectionchange"));
+    await wait(() => !button("Copy selection").disabled);
+    button("Copy selection").dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, cancelable: true }),
+    );
+    click("Copy selection");
+    await wait(() => host.textContent?.includes("Copied to clipboard."));
+    assert(
+      copies[0] === "mobile selection",
+      "Copy must use the native selection",
+    );
+    await ws.output("\x1b[Hafter\x1b[K");
+    assert(
+      field.value === frozen &&
+        field.selectionStart === start &&
+        field.selectionEnd === start + "mobile selection".length,
+      "Live terminal output must not rewrite the snapshot or selection handles",
+    );
+    click("Copy all");
+    await wait(() => copies.length === 2);
+    assert(copies[1] === frozen, "Copy all must copy only the frozen snapshot");
+    for (const clipboard of [
+      undefined,
+      {
+        writeText: async () => {
+          throw new DOMException("fixture refusal", "NotAllowedError");
+        },
+      },
+    ]) {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: clipboard,
+      });
+      click("Copy all");
+      await wait(() =>
+        host.textContent?.includes(
+          "Clipboard access was blocked or unavailable",
+        ),
+      );
+      assert(
+        field.value === frozen && copies.length === 2,
+        "Missing or denied clipboard access must retain text for native copying, not report success",
+      );
+    }
+    host.querySelector("dialog")!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        code: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    flushSync(() =>
+      host
+        .querySelector("dialog")!
+        .dispatchEvent(new Event("cancel", { cancelable: true })),
+    );
+    assert(
+      !host.querySelector(".copy-text") &&
+        Socket.instances.length === attachments &&
+        !ws.sent.some((m) => m.type === "input" || m.type === "paste"),
+      "Opening, selecting, copying and dismissing must not send input or replace the terminal",
+    );
+    click("Select terminal text");
+    assert(
+      host
+        .querySelector<HTMLTextAreaElement>(".copy-text")!
+        .value.startsWith("after\n") && button("Copy selection").disabled,
+      "Reopening must take a fresh snapshot without retaining an old selection",
+    );
+    click("Close dialog");
+    await ws.output("\x1b[2J\x1b[H");
+    click("Select terminal text");
+    assert(
+      button("Copy all").disabled && button("Copy selection").disabled,
+      "An empty screen must not offer a successful no-op copy",
+    );
+    click("Close dialog");
+    await ws.output("\x1b[?1002l\x1b[?1006l\x1b[?1049l");
+    await ws.bracketed(true);
+    const pasteField = () =>
+      host.querySelector<HTMLTextAreaElement>(".paste-text")!;
+    const editPaste = (text: string) =>
+      flushSync(() => {
+        const field = pasteField();
+        Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )!.set!.call(field, text);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    let reads = 0;
+    let resolveClipboard!: (text: string) => void;
+    const delayedClipboard = {
+      readText: () => {
+        reads++;
+        return new Promise<string>((resolve) => {
+          resolveClipboard = resolve;
+        });
+      },
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: delayedClipboard,
+    });
+    click("Paste text");
+    assert(
+      reads === 1 &&
+        pasteField() &&
+        button("Paste into terminal").disabled &&
+        !ws.sent.some((m) => m.type === "paste" || m.type === "input"),
+      "The paste tap must request clipboard access but send nothing until review",
+    );
+    resolveClipboard("clipboard first\nclipboard second");
+    await wait(
+      () => pasteField().value === "clipboard first\nclipboard second",
+    );
+    editPaste("reviewed first\nreviewed second");
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        code: "KeyS",
+        key: "s",
+        ctrlKey: true,
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    assert(
+      pasteField()?.value === "reviewed first\nreviewed second",
+      "The session shortcut must not discard an open paste form",
+    );
+    const deliver = button("Paste into terminal");
+    flushSync(() => {
+      deliver.click();
+      deliver.click();
+    });
+    const textPaste = ws.sent.find((m) => m.type === "paste")!;
+    assert(
+      ws.sent.filter((m) => m.type === "paste").length === 1 &&
+        textPaste.data ===
+          "\x1b[200~reviewed first\rreviewed second\x1b[201~" &&
+        textPaste.paneId === "%1" &&
+        textPaste.submit === false &&
+        textPaste.backend === undefined &&
+        !textPaste.opencodeOnly,
+      "Reviewed text must be sent once to its captured pane, with no backend restriction or Enter",
+    );
+    ws.receive({ type: "input-ack", id: textPaste.id });
+    await wait(() => !host.querySelector("dialog"));
+    for (const value of [
+      undefined,
+      {
+        readText: async () => {
+          throw new DOMException(
+            "fixture clipboard refusal",
+            "NotAllowedError",
+          );
+        },
+      },
+    ]) {
+      await ws.bracketed(true);
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value,
+      });
+      click("Paste text");
+      await wait(() =>
+        host
+          .querySelector("dialog")
+          ?.textContent?.includes("Long-press the field and choose Paste."),
+      );
+      editPaste("native paste fallback");
+      click("Paste into terminal");
+      const fallback = ws.sent.find((m) => m.type === "paste")!;
+      assert(
+        fallback?.data === "\x1b[200~native paste fallback\x1b[201~",
+        "Missing or denied clipboard reads must leave a working native text input fallback",
+      );
+      ws.receive({ type: "input-ack", id: fallback.id });
+      await wait(() => !host.querySelector("dialog"));
+    }
+    await ws.bracketed(true);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: delayedClipboard,
+    });
+    click("Paste text");
+    editPaste("manual draft");
+    resolveClipboard("late clipboard must not replace this draft");
+    await wait(() => !host.textContent?.includes("Reading clipboard..."));
+    assert(
+      pasteField().value === "manual draft",
+      "Late reads must not overwrite manual edits",
+    );
+    ws.receive({ type: "pane", paneId: "%2" });
+    ws.receive({ type: "pane", paneId: "%1" });
+    await wait(() => button("Paste into terminal").disabled);
+    assert(
+      host
+        .querySelector("dialog")
+        ?.textContent?.includes("The terminal changed") &&
+        !ws.sent.some((m) => m.type === "paste" || m.type === "input"),
+      "Pane round trips must invalidate an open paste draft without sending it elsewhere",
+    );
+    click("Cancel");
+    click("Paste text");
+    click("Cancel");
+    resolveClipboard("late read after dismissal");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert(
+      !host.querySelector("dialog") &&
+        !ws.sent.some((m) => m.type === "paste" || m.type === "input"),
+      "Cancelling a pending clipboard read must discard the result without terminal input",
+    );
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { readText: async () => "retained draft" },
+    });
+    click("Paste text");
+    await wait(() => pasteField().value === "retained draft");
+    click("Paste into terminal");
+    const refused = ws.sent.find((m) => m.type === "paste")!;
+    ws.receive({
+      type: "input-ack",
+      id: refused.id,
+      error: "fixture paste refused",
+    });
+    await wait(() =>
+      host
+        .querySelector(".form-error")
+        ?.textContent?.includes("fixture paste refused"),
+    );
+    assert(
+      pasteField().value === "retained draft" &&
+        ws.sent.filter((m) => m.type === "paste").length === 1,
+      "Failed delivery must preserve the draft and never retry automatically",
+    );
+    click("Cancel");
+    await ws.bracketed(true);
+    if (originalClipboard)
+      Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
     const finish = await record();
     assert(
       localStorage.getItem("perch-auto-speech") === "true",
@@ -956,6 +1417,8 @@ async function appChecks(root: Root, host: HTMLElement) {
     ws.receive({ type: "input-ack", id: piPaste.id });
     await wait(() => !host.querySelector(".progress"));
     return [
+      "PASS visible mobile navigation, compact clipboard icons, reviewed text paste, native fallback and clipboard races",
+      "PASS native mobile text selection, frozen snapshots, copy feedback, clipboard refusal and dialog input isolation",
       "PASS Pi image file reference upload and backend-bound non-submitting delivery",
       "PASS dictation, microphone cancellation, warm model reuse, and late transcripts",
       "PASS image upload cancellation, guarded delivery, and persistent dictation recovery",
@@ -973,5 +1436,8 @@ async function appChecks(root: Root, host: HTMLElement) {
     }
     if (devices) Object.defineProperty(navigator, "mediaDevices", devices);
     else Reflect.deleteProperty(navigator, "mediaDevices");
+    if (originalClipboard)
+      Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
   }
 }

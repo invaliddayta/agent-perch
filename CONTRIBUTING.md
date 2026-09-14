@@ -21,7 +21,11 @@ bun run build
 
 The tests use disposable directories and separate tmux sockets. They do not need provider keys. Optional real-CLI smoke checks are described in [verification](docs/verification.md).
 
-For browser regressions, run `bun run dev` and open `/tests/browser.html` on that dev server. It reports PASS lines or a failure stack. These checks use real React and xterm with fake HTTP, WebSocket, microphone, and speech-worker fixtures; they never launch agents or contact a backend. They cover attachment invalidation, snapshot races, dictation and image delivery, remembered speech startup and opt-out, session dialogs, and native audio decoding/resampling with generated WAVs. This browser suite is separate from `bun test` and is not included in production builds.
+For browser regressions, run `bun run dev` and open `/tests/browser.html` on that dev server. It reports PASS lines or a failure stack. These checks use real React and xterm with fake HTTP, WebSocket, microphone, and speech-worker fixtures; they never launch agents or contact a backend. The suite is separate from `bun test` and is not included in production builds.
+
+Coverage includes attachment invalidation, session snapshot races, dictation/image delivery, speech startup and opt-out, dialogs, and native audio decoding/resampling. Mobile clipboard checks cover visible navigation, text snapshots, selection, reviewed paste, unavailable or denied access, manual fallback, late reads, destination changes, and framing/size limits.
+
+Run at phone widths too: navigation buttons must remain visible without horizontal scrolling. Clipboard access and touch scrolling are simulated; use a hardware phone to check native long-press handles and Copy/Paste menus.
 
 The Bun suite also runs the actual speech worker with a fake inference module and checks that production builds do not emit duplicate WASM. Neither check needs downloaded models or a GPU.
 
