@@ -1,78 +1,27 @@
-import { cp, mkdir, rename, rm, stat } from "node:fs/promises";
+/**
+ * Puts the on-device speech model (Moonshine, English, ~300 MB) and its WASM runtime into
+ * web/voice/, which the server serves at /models and /speech. Downloads the pinned model files
+ * from download.moonshine.ai (skipping those already there) and copies the runtime from web/node_modules.
+ */
+import { cpSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  MODEL_FILES,
-  MODEL_PATH,
-  MODEL_URL,
-  RUNTIME_PATH,
-  SPEECH_MODEL,
-  SPEECH_REVISION,
-  SPEECH_RUNTIME,
-} from "../src/speech-model";
+import { MODEL_FILES, MODEL_PATH, MODEL_URL, RUNTIME_PATH } from "../web/src/speech-model.ts";
 
-const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
-const modelDir = join(publicDir, MODEL_PATH);
-const runtimeDir = join(publicDir, RUNTIME_PATH);
-const marker = join(modelDir, "ready.json");
-await mkdir(modelDir, { recursive: true });
-await rm(marker, { force: true });
+const root = join(import.meta.dir, "..", "web", "voice");
+const modelDir = join(root, MODEL_PATH);
+const runtimeDir = join(root, RUNTIME_PATH);
+mkdirSync(modelDir, { recursive: true });
 
-let total = 0;
-for (const [file, expected] of Object.entries(MODEL_FILES)) {
-  const destination = join(modelDir, file);
-  const response = await fetch(`${MODEL_URL}/${file}`, {
-    signal: AbortSignal.timeout(300000),
-  });
-  if (!response.ok || !response.body)
-    throw new Error(`Failed to download ${file}: HTTP ${response.status}`);
-  const temporary = `${destination}.download`;
-  try {
-    await Bun.write(temporary, await response.arrayBuffer());
-    const { size } = await stat(temporary);
-    if (size !== expected)
-      throw new Error(
-        `Incomplete ${file}: expected ${expected} bytes, received ${size}`,
-      );
-    await rename(temporary, destination);
-    total += size;
-    console.log(`${file}: ${(size / 1024 ** 2).toFixed(2)} MiB`);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+for (const [file, size] of Object.entries(MODEL_FILES)) {
+	const dest = join(modelDir, file);
+	if (existsSync(dest) && statSync(dest).size === size) continue;
+	const r = await fetch(`${MODEL_URL}/${file}`);
+	if (!r.ok) throw new Error(`${file}: HTTP ${r.status}`);
+	await Bun.write(dest, await r.arrayBuffer());
+	if (statSync(dest).size !== size) throw new Error(`${file}: wrong size`);
+	console.log(`${file} ${(size / 2 ** 20).toFixed(1)} MiB`);
 }
-
-const runtimeSource = dirname(
-  fileURLToPath(import.meta.resolve("@moonshine-ai/moonshine-wasm")),
-);
-await cp(runtimeSource, runtimeDir, { recursive: true });
-const license = await fetch(
-  "https://raw.githubusercontent.com/moonshine-ai/moonshine/234f60faa0eb388b01cdf7e60aca232af37aefda/LICENSE",
-);
-if (!license.ok)
-  throw new Error("Could not fetch the pinned Moonshine license");
-await Bun.write(join(runtimeDir, "LICENSE"), await license.text());
-for await (const file of new Bun.Glob("**/*").scan({
-  cwd: runtimeDir,
-  onlyFiles: true,
-}))
-  total += (await stat(join(runtimeDir, file))).size;
-await Bun.write(
-  marker,
-  JSON.stringify(
-    {
-      model: SPEECH_MODEL,
-      revision: SPEECH_REVISION,
-      runtime: SPEECH_RUNTIME,
-      language: "en",
-      dtype: "q8",
-      bytes: total,
-      preparedAt: new Date().toISOString(),
-    },
-    null,
-    2,
-  ) + "\n",
-);
-console.log(
-  `English voice assets ready: ${(total / 1024 ** 2).toFixed(2)} MiB total`,
-);
+const runtime = dirname(fileURLToPath(import.meta.resolve("@moonshine-ai/moonshine-wasm", join(import.meta.dir, "..", "web", "package.json"))));
+cpSync(runtime, runtimeDir, { recursive: true });
+console.log(`voice ready in ${root}`);

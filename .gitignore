@@ -1,18 +1,8 @@
-node_modules/
-dist/
-.state/
-.env
-.env.*
-!.env.example
-*.log
-*.db
-*.db-*
-*.sqlite*
-*.pem
-*.key
-coverage/
-.DS_Store
-public/models/
-public/ort/
-public/speech/
-test-results/
+node_modules
+web/dist
+web/voice
+# Left in a v1 checkout after pulling v2 (build output, settings, speech assets)
+/dist/
+/.state/
+/.env
+/public/
